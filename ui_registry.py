@@ -73,7 +73,7 @@ def show():
     with tab_prop_new:
         with st.form("new_property_form", clear_on_submit=True):
             charact, atak, dimos = st.text_input("Χαρακτηριστικό Ακινήτου *"), st.text_input("ΑΤΑΚ *"), st.text_input("Περιοχή / Δήμος *")
-            nomos = st.text_input("Νομός", value="Αττικής") 
+            nomos = st.text_input("Νομός", value="ΑΤΤΙΚΗΣ") 
             col1, col2 = st.columns(2)
             with col1: address = st.text_input("Οδός *")
             with col2: number = st.text_input("Αριθμός")
