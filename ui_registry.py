@@ -84,13 +84,13 @@ def show():
             st.subheader("Ημερολόγιο Εξόδων (Προαιρετικό)")
             extra_months = st.multiselect("Επιλέξτε Μήνες που εκδίδονται Λογαριασμοί (π.χ. Νερό, Κοινόχρηστα)", options=list(MONTHS_DICT.keys()), format_func=lambda x: MONTHS_DICT[x])
             
-            st.subheader("Ιδιοκτήτες & Δικαιώματα")
+            st.subheader("Ιδιοκτήτες")
             owner_data = []
             for i in range(1, 4):
-                with st.expander(f"Εγγραφή Δικαιώματος {i}", expanded=(i==1)):
+                with st.expander(f"Ιδιοκτήτης {i}", expanded=(i==1)):
                     c1, c2 = st.columns(2)
-                    n = c1.text_input(f"Όνομα", key=f"n{i}", value="Γιώργος" if i==1 else "")
-                    s = c2.text_input(f"Επώνυμο", key=f"s{i}", value="Μπαλτάσης" if i==1 else "")
+                    n = c1.text_input(f"Όνομα", key=f"n{i}")
+                    s = c2.text_input(f"Επώνυμο", key=f"s{i}")
                     c3, c4, c5 = st.columns(3)
                     afm = c3.text_input(f"ΑΦΜ", key=f"afm{i}")
                     right = c4.selectbox(f"Είδος", ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"], key=f"r{i}")
