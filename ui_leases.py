@@ -17,36 +17,6 @@ def show():
 
     tab_new, tab_list, tab_edit = st.tabs([ "📋 Υπάρχουσες Μισθώσεις", "➕ Νέα Μίσθωση", "✏️ Επεξεργασία Μίσθ."])
 
-    with tab_new:
-        if properties_df.empty or tenants_df.empty: st.warning("Πρέπει να καταχωρήσετε Ακίνητο και Ενοικιαστή στο Μητρώο.")
-        else:
-            prop_options = {row["Property_ID"]: f"{row.get('Διεύθυνση','')} {row.get('Αριθμός','')} - {row.get('Χαρακτηριστικό', '')}" for _, row in properties_df.iterrows()}
-            tenant_options = {row["Tenant_ID"]: f"{row.get('Όνομα', '')} {row.get('Επώνυμο', '')} (ΑΦΜ: {row.get('ΑΦΜ', '')})" for _, row in tenants_df.iterrows()}
-
-            with st.form("new_lease_form", clear_on_submit=True):
-                st.subheader("1. Αντιστοίχιση")
-                selected_prop_id = st.selectbox("Ακίνητο *", options=list(prop_options.keys()), format_func=lambda x: prop_options[x])
-                selected_tenant_ids = st.multiselect("Ενοικιαστής / Ενοικιαστές *", options=list(tenant_options.keys()), format_func=lambda x: tenant_options[x])
-                
-                st.subheader("2. Οικονομικοί Όροι")
-                col1, col2 = st.columns(2)
-                with col1:
-                    start_date = st.date_input("Ημ/νία Έναρξης *", value=date.today())
-                    rent_input = st.text_input("Μηνιαίο Μίσθωμα (€) *", value="0")
-                with col2: end_date = st.date_input("Ημ/νία Λήξης *")
-                    
-                special_agreements, aade_url = st.text_area("Ειδικές Συμφωνίες"), st.text_input("Σύνδεσμος ΑΑΔΕ (URL)", placeholder="https://...")
-
-                if st.form_submit_button("Αποθήκευση Μίσθωσης", use_container_width=True):
-                    rent_val = pd.to_numeric(rent_input.replace(',', '.'), errors='coerce')
-                    if pd.isna(rent_val): rent_val = 0.0
-                    if rent_val > 0 and end_date > start_date and selected_tenant_ids:
-                        try:
-                            gsheets_service.add_lease([f"LS-{uuid.uuid4().hex[:6].upper()}", selected_prop_id, ",".join(selected_tenant_ids), start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), rent_input, special_agreements, aade_url])
-                            st.success("Η μίσθωση αποθηκεύτηκε!")
-                        except Exception as e: st.error(f"Σφάλμα: {e}")
-                    else: st.warning("Ελέγξτε τις ημερομηνίες, το έγκυρο ποσό και επιλέξτε τουλάχιστον έναν ενοικιαστή.")
-
     with tab_list:
         if leases_df.empty: st.info("Δεν υπάρχουν καταχωρημένες μισθώσεις.")
         else:
@@ -82,6 +52,37 @@ def show():
                     "Μίσθωμα": f"{rent_val:.2f} €".replace('.', ','),
                 })
             st.dataframe(pd.DataFrame(lease_list_data), use_container_width=True, hide_index=True)
+    
+    with tab_new:
+        if properties_df.empty or tenants_df.empty: st.warning("Πρέπει να καταχωρήσετε Ακίνητο και Ενοικιαστή στο Μητρώο.")
+        else:
+            prop_options = {row["Property_ID"]: f"{row.get('Διεύθυνση','')} {row.get('Αριθμός','')} - {row.get('Χαρακτηριστικό', '')}" for _, row in properties_df.iterrows()}
+            tenant_options = {row["Tenant_ID"]: f"{row.get('Όνομα', '')} {row.get('Επώνυμο', '')} (ΑΦΜ: {row.get('ΑΦΜ', '')})" for _, row in tenants_df.iterrows()}
+
+            with st.form("new_lease_form", clear_on_submit=True):
+                st.subheader("1. Αντιστοίχιση")
+                selected_prop_id = st.selectbox("Ακίνητο *", options=list(prop_options.keys()), format_func=lambda x: prop_options[x])
+                selected_tenant_ids = st.multiselect("Ενοικιαστής / Ενοικιαστές *", options=list(tenant_options.keys()), format_func=lambda x: tenant_options[x])
+                
+                st.subheader("2. Οικονομικοί Όροι")
+                col1, col2 = st.columns(2)
+                with col1:
+                    start_date = st.date_input("Ημ/νία Έναρξης *", value=date.today())
+                    rent_input = st.text_input("Μηνιαίο Μίσθωμα (€) *", value="0")
+                with col2: end_date = st.date_input("Ημ/νία Λήξης *")
+                    
+                special_agreements, aade_url = st.text_area("Ειδικές Συμφωνίες"), st.text_input("Σύνδεσμος ΑΑΔΕ (URL)", placeholder="https://...")
+
+                if st.form_submit_button("Αποθήκευση Μίσθωσης", use_container_width=True):
+                    rent_val = pd.to_numeric(rent_input.replace(',', '.'), errors='coerce')
+                    if pd.isna(rent_val): rent_val = 0.0
+                    if rent_val > 0 and end_date > start_date and selected_tenant_ids:
+                        try:
+                            gsheets_service.add_lease([f"LS-{uuid.uuid4().hex[:6].upper()}", selected_prop_id, ",".join(selected_tenant_ids), start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), rent_input, special_agreements, aade_url])
+                            st.success("Η μίσθωση αποθηκεύτηκε!")
+                        except Exception as e: st.error(f"Σφάλμα: {e}")
+                    else: st.warning("Ελέγξτε τις ημερομηνίες, το έγκυρο ποσό και επιλέξτε τουλάχιστον έναν ενοικιαστή.")
+    
 
     with tab_edit:
         if leases_df.empty: st.warning("Δεν υπάρχουν μισθώσεις.")
