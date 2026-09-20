@@ -1,6 +1,5 @@
 import streamlit as st
 import gsheets_service
-import gdrive_service  # Θα το φτιάξουμε αμέσως μετά
 import uuid
 import pandas as pd
 from datetime import date
@@ -55,9 +54,9 @@ def show():
             
         special_agreements = st.text_area("Ειδικές Συμφωνίες (π.χ. Κατοικίδια, Κοινόχρηστα, Νερό)")
         
-        # --- 4. Έγγραφο ΑΑΔΕ ---
-        st.subheader("4. Αρχείο ΑΑΔΕ (Προαιρετικό τώρα)")
-        uploaded_pdf = st.file_uploader("Ανέβασμα Δήλωσης ΑΑΔΕ (PDF)", type=["pdf"])
+        # --- 4. Έγγραφο ΑΑΔΕ (Τροποποιημένο σε URL) ---
+        st.subheader("4. Αρχείο ΑΑΔΕ (Προαιρετικό)")
+        aade_url = st.text_input("Επικόλληση Συνδέσμου (URL) από τη Δήλωση ΑΑΔΕ", placeholder="https://...")
 
         submit_lease = st.form_submit_button("Αποθήκευση Μίσθωσης", use_container_width=True)
         
@@ -66,16 +65,7 @@ def show():
                 # 1. Δημιουργία ID Μίσθωσης
                 lease_id = f"LS-{uuid.uuid4().hex[:6].upper()}"
                 
-                # 2. Ανέβασμα PDF στο Drive (αν υπάρχει)
-                pdf_url = ""
-                if uploaded_pdf is not None:
-                    try:
-                        with st.spinner("Μεταφόρτωση PDF στο Google Drive..."):
-                            pdf_url = gdrive_service.upload_aade_pdf(uploaded_pdf, f"AADE_{lease_id}.pdf")
-                    except Exception as e:
-                        st.error(f"Σφάλμα μεταφόρτωσης PDF: {e}")
-                
-                # 3. Εγγραφή στο Google Sheet
+                # 2. Εγγραφή στο Google Sheet
                 # Σειρά: Lease_ID, Property_ID, Tenant_ID, Owner_Name, Owner_Surname, Owner_AFM, 
                 # Ownership_Percentage, Property_Right_Type, Start_Date, End_Date, Monthly_Rent, Special_Agreements, AADE_Document_URL
                 row_data = [
@@ -83,7 +73,7 @@ def show():
                     owner_name, owner_surname, owner_afm, 
                     ownership_perc, right_type, 
                     start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), 
-                    monthly_rent, special_agreements, pdf_url
+                    monthly_rent, special_agreements, aade_url
                 ]
                 
                 try:
