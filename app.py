@@ -1,13 +1,4 @@
 import streamlit as st
-
-# Ρύθμιση της σελίδας - ΠΡΕΠΕΙ να είναι η πρώτη εντολή Streamlit στο αρχείο
-st.set_page_config(
-    page_title="Property Manager", 
-    page_icon="🏢", 
-    layout="centered",
-    initial_sidebar_state="collapsed" # Κρύβουμε το sidebar για καλύτερη εμπειρία σε κινητό
-)
-
 # Εισαγωγή των υπόλοιπων αρχείων-ενοτήτων
 import ui_dashboard
 import ui_leases
@@ -16,6 +7,14 @@ import ui_registry
 
 # ΠΡΟΣΘΗΚΗ ΓΙΑ DESKTOP LAYOUT (Πρέπει να είναι η πρώτη εντολή Streamlit)
 st.set_page_config(page_title="Διαχείριση Ακινήτων", layout="wide")
+
+# Ρύθμιση της σελίδας - ΠΡΕΠΕΙ να είναι η πρώτη εντολή Streamlit στο αρχείο
+st.set_page_config(
+    page_title="Property Manager", 
+    page_icon="🏢", 
+    layout="centered",
+    initial_sidebar_state="collapsed" # Κρύβουμε το sidebar για καλύτερη εμπειρία σε κινητό
+)
 
 # Τίτλος της εφαρμογής
 st.title("Διαχείριση Ακινήτων")
