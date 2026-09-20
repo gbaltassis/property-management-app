@@ -55,12 +55,13 @@ def show():
         else:
             tenant_data = []
             for _, tenant in tenants_df.iterrows():
-                t_id = tenant.get("Tenant_ID")
+                t_id = str(tenant.get("Tenant_ID"))
                 linked_prop_charact = "-"
                 
-                # Διασταύρωση: Βρίσκουμε την ενεργή μίσθωση για να τραβήξουμε το χαρακτηριστικό του ακινήτου
+                # Διασταύρωση: Ψάχνουμε αν το t_id υπάρχει μέσα στο κείμενο των Tenant_ID της μίσθωσης
                 if not leases_df.empty and not properties_df.empty:
-                    t_leases = leases_df[leases_df["Tenant_ID"] == t_id]
+                    # Χρήση regex=False για ασφαλή αναζήτηση μέσα στο string (π.χ. "TN-123, TN-456")
+                    t_leases = leases_df[leases_df["Tenant_ID"].astype(str).str.contains(t_id, na=False, regex=False)]
                     if not t_leases.empty:
                         p_id = t_leases.iloc[-1]["Property_ID"]
                         p_match = properties_df[properties_df["Property_ID"] == p_id]
@@ -96,10 +97,10 @@ def show():
             st.subheader("Ιδιοκτήτες & Δικαιώματα")
             owner_data = []
             for i in range(1, 4):
-                with st.expander(f"Ιδιοκτήτης {i}", expanded=(i==1)):
+                with st.expander(f"Εγγραφή Δικαιώματος {i}", expanded=(i==1)):
                     c1, c2 = st.columns(2)
-                    n = c1.text_input(f"Όνομα", key=f"n{i}")
-                    s = c2.text_input(f"Επώνυμο", key=f"s{i}")
+                    n = c1.text_input(f"Όνομα", key=f"n{i}", value="Γιώργος" if i==1 else "")
+                    s = c2.text_input(f"Επώνυμο", key=f"s{i}", value="Μπαλτάσης" if i==1 else "")
                     c3, c4, c5 = st.columns(3)
                     afm = c3.text_input(f"ΑΦΜ", key=f"afm{i}")
                     right = c4.selectbox(f"Είδος", ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"], key=f"r{i}")
