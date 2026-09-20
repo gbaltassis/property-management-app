@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import date, datetime
 
 def show():
-    st.header("Καταγραφή Πληρωμών")
+    st.header("Καταγραφή & Παρακολούθηση Πληρωμών")
     
     try:
         leases_df = gsheets_service.fetch_all_leases()
@@ -16,8 +16,7 @@ def show():
         st.error(f"Αδυναμία φόρτωσης δεδομένων: {e}")
         return
 
-    tab_new, tab_list, tab_edit = st.tabs(["➕ Νέα Είσπραξη", "📋 Ιστορικό", "✏️ Επεξεργασία"])
-
+    # Προετοιμασία Λίστας Επιλογών (για τα Dropdowns των φορμών)
     lease_options = {}
     if not leases_df.empty:
         for _, row in leases_df.iterrows():
@@ -38,8 +37,89 @@ def show():
                     
             lease_options[l_id] = f"{' & '.join(t_names) if t_names else 'Άγνωστος'} | {prop_address}"
 
+    # Ορισμός Καρτελών - Βάζουμε το Matrix πρώτο!
+    tab_matrix, tab_new, tab_list, tab_edit = st.tabs([
+        "📊 Ετήσια Επισκόπηση", "➕ Νέα Είσπραξη", "📋 Ιστορικό", "✏️ Επεξεργασία"
+    ])
+
+    # --- 1. ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ (ΑΝΤΙΓΡΑΦΟ ΤΟΥ EXCEL) ---
+    with tab_matrix:
+        st.subheader("Συγκεντρωτικός Πίνακας Ελέγχου")
+        st.caption("Μια ματιά στις πληρωμές όλων των μηνών για το επιλεγμένο έτος.")
+        
+        current_year = datetime.today().year
+        selected_year = st.selectbox("Επιλογή Έτους", [current_year - 1, current_year, current_year + 1, current_year + 2], index=1)
+        
+        if leases_df.empty:
+            st.info("Δεν υπάρχουν ενεργές μισθώσεις.")
+        else:
+            matrix_data = []
+            months = [("Ιαν", 1), ("Φεβ", 2), ("Μαρ", 3), ("Απρ", 4), ("Μάι", 5), ("Ιουν", 6), 
+                      ("Ιουλ", 7), ("Αυγ", 8), ("Σεπ", 9), ("Οκτ", 10), ("Νοε", 11), ("Δεκ", 12)]
+            
+            # Μετατροπή ημερομηνιών των πληρωμών (μία φορά για ταχύτητα)
+            if not payments_df.empty:
+                payments_df['Date_Obj'] = pd.to_datetime(payments_df['Date_Received'], errors='coerce')
+            
+            for _, lease in leases_df.iterrows():
+                l_id = str(lease.get("Lease_ID", ""))
+                
+                # --- Στοιχεία Μίσθωσης ---
+                p_id = str(lease.get("Property_ID", ""))
+                prop_charact = "-"
+                if not properties_df.empty:
+                    p_match = properties_df[properties_df["Property_ID"] == p_id]
+                    if not p_match.empty: prop_charact = f"{str(p_match.iloc[0].get('Χαρακτηριστικό', '')).replace('nan','')} ({str(p_match.iloc[0].get('Διεύθυνση', '')).replace('nan','')})"
+                
+                t_names = []
+                for tid_clean in [t.strip() for t in str(lease.get("Tenant_ID", "")).split(',') if t.strip()]:
+                    t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
+                    if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', '')).replace('nan','')} {str(t_match.iloc[0].get('Όνομα', '')).replace('nan','')}")
+                tenant_name = " & ".join(t_names) if t_names else "Άγνωστος"
+                
+                rent_val = pd.to_numeric(str(lease.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
+                if pd.isna(rent_val): rent_val = 0.0
+                
+                row_data = {
+                    "Ακίνητο": prop_charact,
+                    "Ενοικιαστής": tenant_name,
+                    "Μίσθωμα": f"{rent_val:.2f} €".replace('.', ','),
+                    "Λήξη": str(lease.get("End_Date", "-"))
+                }
+                
+                # --- Υπολογισμός Μηνών ---
+                for m_name, m_num in months:
+                    if payments_df.empty:
+                        row_data[m_name] = "❌ Εκκρεμεί"
+                        continue
+                        
+                    # Φιλτράρισμα πληρωμών για το συγκεκριμένο συμβόλαιο, ενοίκιο, έτος και μήνα
+                    p_month = payments_df[
+                        (payments_df['Lease_ID'] == l_id) & 
+                        (payments_df['Payment_Type'] == 'Ενοίκιο') &
+                        (payments_df['Date_Obj'].dt.year == selected_year) & 
+                        (payments_df['Date_Obj'].dt.month == m_num)
+                    ]
+                    
+                    total_paid = pd.to_numeric(p_month['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
+                    
+                    if total_paid == 0:
+                        row_data[m_name] = "❌ Εκκρεμεί"
+                    elif total_paid < rent_val:
+                        row_data[m_name] = f"⚠️ {total_paid:.2f}€".replace('.', ',')
+                    else:
+                        # Παίρνουμε το όνομα της τράπεζας από την τελευταία πληρωμή του μήνα
+                        last_bank = str(p_month.iloc[-1].get('Bank_Account', 'Εξοφλήθη')).replace('nan', 'Εξοφλήθη')
+                        row_data[m_name] = f"✅ {last_bank}"
+                        
+                matrix_data.append(row_data)
+                
+            # Εμφάνιση του Native Dataframe (Με Scroll Bar)
+            st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
+
+    # --- 2. ΝΕΑ ΠΛΗΡΩΜΗ ---
     with tab_new:
-        if not lease_options: st.info("Δεν υπάρχουν ενεργές μισθώσεις για να καταγράψετε πληρωμή.")
+        if not lease_options: st.info("Δεν υπάρχουν ενεργές μισθώσεις.")
         else:
             with st.form("new_payment_form", clear_on_submit=True):
                 selected_lease_id = st.selectbox("Επιλογή Μίσθωσης / Ενοικιαστών *", options=list(lease_options.keys()), format_func=lambda x: lease_options[x])
@@ -57,9 +137,10 @@ def show():
                         try:
                             gsheets_service.add_payment([f"PAY-{uuid.uuid4().hex[:6].upper()}", selected_lease_id, payment_type, amount_input, date_received.strftime("%Y-%m-%d"), bank_account])
                             st.success(f"Η είσπραξη καταχωρήθηκε επιτυχώς!")
-                        except Exception as e: st.error(f"Σφάλμα αποθήκευσης: {e}")
+                        except Exception as e: st.error(f"Σφάλμα: {e}")
                     else: st.warning("Παρακαλώ εισάγετε έγκυρο ποσό μεγαλύτερο του μηδενός.")
 
+    # --- 3. ΙΣΤΟΡΙΚΟ (NATIVE DATAFRAME) ---
     with tab_list:
         if payments_df.empty: st.info("Δεν έχουν καταγραφεί εισπράξεις.")
         else:
@@ -74,21 +155,21 @@ def show():
                     "Ποσό": f"{amt_val:.2f} €".replace('.', ','),
                     "Μέθοδος": row.get("Bank_Account", "")
                 })
-            pay_list_data.reverse()
+            pay_list_data.reverse() # Τα πιο πρόσφατα πάνω-πάνω
             st.dataframe(pd.DataFrame(pay_list_data), use_container_width=True, hide_index=True)
 
+    # --- 4. ΕΠΕΞΕΡΓΑΣΙΑ ΠΛΗΡΩΜΗΣ ---
     with tab_edit:
         if payments_df.empty: st.warning("Δεν υπάρχουν πληρωμές.")
         else:
             p_edit_opts = {str(r.get("Payment_ID", "")): f"{str(r.get('Date_Received', ''))} | {str(r.get('Payment_Type', ''))} {str(r.get('Amount', ''))}€" for _, r in payments_df.iterrows()}
-            selected_pay_edit = st.selectbox("Επιλέξτε Πληρωμή", options=list(p_edit_opts.keys()), format_func=lambda x: p_edit_opts[x])
+            selected_pay_edit = st.selectbox("Επιλέξτε Πληρωμή προς Επεξεργασία", options=list(p_edit_opts.keys()), format_func=lambda x: p_edit_opts[x])
             
             if selected_pay_edit:
                 sel_pay = payments_df[payments_df["Payment_ID"] == selected_pay_edit].iloc[0]
                 l_keys = list(lease_options.keys())
                 try: l_idx = l_keys.index(str(sel_pay.get("Lease_ID", "")))
                 except: l_idx = 0
-                
                 try: pay_date = datetime.strptime(str(sel_pay.get("Date_Received", "")), "%Y-%m-%d").date()
                 except: pay_date = date.today()
 
@@ -113,7 +194,7 @@ def show():
                     try:
                         gsheets_service.delete_payment(selected_pay_edit)
                         st.success("Η πληρωμή διαγράφηκε! Ανανεώστε τη σελίδα.")
-                    except Exception as e: st.error(f"Σφάλμα διαγραφής: {e}")
+                    except Exception as e: st.error(f"Σφάλμα: {e}")
 
                 if upd_p_btn:
                     amt_val = pd.to_numeric(e_amount.replace(',', '.'), errors='coerce')
@@ -122,5 +203,5 @@ def show():
                         try:
                             gsheets_service.update_payment(selected_pay_edit, [selected_pay_edit, e_lease, e_type, e_amount, e_date_rec.strftime("%Y-%m-%d"), e_bank])
                             st.success("Οι αλλαγές αποθηκεύτηκαν! Ανανεώστε τη σελίδα.")
-                        except Exception as e: st.error(f"Σφάλμα επεξεργασίας: {e}")
+                        except Exception as e: st.error(f"Σφάλμα: {e}")
                     else: st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
