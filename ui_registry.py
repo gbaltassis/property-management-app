@@ -12,7 +12,7 @@ def show():
         tenants_df = gsheets_service.fetch_all_tenants()
         leases_df = gsheets_service.fetch_all_leases()
     except Exception as e:
-        st.error("Σφάλμα κατά τη φόρτωση δεδομένων.")
+        st.error(f"Σφάλμα κατά τη φόρτωση δεδομένων: {e}")
         return
 
     tab_prop_list, tab_tenant_list, tab_prop_new, tab_tenant_new = st.tabs([
