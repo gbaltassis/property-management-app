@@ -4,7 +4,36 @@ import uuid
 import pandas as pd
 from datetime import date, datetime
 
+COMMON_CSS = """
+<style>
+    .custom-table {
+        width: 100% !important;
+        border-collapse: collapse;
+        font-family: sans-serif;
+        font-size: 14px;
+        margin-bottom: 2rem;
+    }
+    .custom-table th {
+        text-align: left !important;
+        background-color: #f0f2f6;
+        padding: 12px;
+        border-bottom: 1px solid #e6e9ef;
+        color: #31333F;
+    }
+    .custom-table td {
+        text-align: left !important;
+        word-wrap: break-word !important;
+        white-space: normal !important;
+        padding: 12px;
+        border-bottom: 1px solid #e6e9ef;
+        color: #31333F;
+        vertical-align: top;
+    }
+</style>
+"""
+
 def show():
+    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Μισθώσεις")
     
     try:
@@ -17,7 +46,6 @@ def show():
 
     tab_new, tab_list = st.tabs(["➕ Νέα Μίσθωση", "📋 Υπάρχουσες Μισθώσεις"])
 
-    # --- ΚΑΡΤΕΛΑ 1: ΝΕΑ ΜΙΣΘΩΣΗ ---
     with tab_new:
         if properties_df.empty or tenants_df.empty:
             st.warning("Πρέπει να καταχωρήσετε Ακίνητο και Ενοικιαστή στο Μητρώο.")
@@ -34,7 +62,6 @@ def show():
                 col1, col2 = st.columns(2)
                 with col1:
                     start_date = st.date_input("Ημ/νία Έναρξης *", value=date.today())
-                    # ΑΛΛΑΓΗ: text_input αντί για number_input για να παίρνει κόμμα
                     rent_input = st.text_input("Μηνιαίο Μίσθωμα (€) *", value="0")
                 with col2:
                     end_date = st.date_input("Ημ/νία Λήξης *")
@@ -54,7 +81,7 @@ def show():
                         row_data = [
                             lease_id, selected_prop_id, tenant_ids_str, 
                             start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), 
-                            rent_input, special_agreements, aade_url # Σώζουμε το rent_input (που έχει το κόμμα)
+                            rent_input, special_agreements, aade_url
                         ]
                         try:
                             gsheets_service.add_lease(row_data)
@@ -64,7 +91,6 @@ def show():
                     else:
                         st.warning("Ελέγξτε τις ημερομηνίες, το έγκυρο ποσό και επιλέξτε τουλάχιστον έναν ενοικιαστή.")
 
-    # --- ΚΑΡΤΕΛΑ 2: ΛΙΣΤΑ ΜΙΣΘΩΣΕΩΝ ---
     with tab_list:
         st.subheader("Λίστα Μισθώσεων")
         if leases_df.empty:
@@ -88,17 +114,14 @@ def show():
                         t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
                         if not t_match.empty:
                             t_names.append(f"{t_match.iloc[0].get('Όνομα', '')} {t_match.iloc[0].get('Επώνυμο', '')}")
-                tenant_name = " & ".join(t_names) if t_names else "Άγνωστος"
+                tenant_name = "<br>".join(t_names) if t_names else "Άγνωστος"
                 
                 end_date = row['End_Date_Obj']
                 days_rem = (end_date - today).days if pd.notnull(end_date) else 999
                 
-                if days_rem > 30:
-                    status = "🟢 Ενεργή"
-                elif 0 <= days_rem <= 30:
-                    status = "🟡 Προς Ανανέωση"
-                else:
-                    status = "🔴 Ληγμένη"
+                if days_rem > 30: status = "🟢 Ενεργή"
+                elif 0 <= days_rem <= 30: status = "🟡 Προς Ανανέωση"
+                else: status = "🔴 Ληγμένη"
 
                 rent_val = pd.to_numeric(str(row.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
                 if pd.isna(rent_val): rent_val = 0.0
@@ -109,7 +132,7 @@ def show():
                     "Ενοικιαστής": tenant_name,
                     "Έναρξη": row.get("Start_Date", "-"),
                     "Λήξη": row.get("End_Date", "-"),
-                    "Μίσθωμα": f"{rent_val:.2f} €".replace('.', ','), # Εμφάνιση με κόμμα
+                    "Μίσθωμα": f"{rent_val:.2f} €".replace('.', ','),
                 })
                 
-            st.dataframe(pd.DataFrame(lease_list_data), use_container_width=True, hide_index=True)
+            st.write(pd.DataFrame(lease_list_data).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
