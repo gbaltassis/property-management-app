@@ -124,14 +124,14 @@ def show():
                                 if is_pending:
                                     btn_text = f"\n⚠️Ενοίκιο Εκκρεμεί"
                                 elif rent_paid_amt < expected_rent:
-                                    btn_text = f"Ενοίκιο\n⚠️ {rent_paid_amt:.0f}€"
+                                    btn_text = f"\n⚠️Ενοίκιο {rent_paid_amt:.0f}€"
                                 else:
                                     btn_text = f"\n✅Ενοίκιο Εξοφλ."
                             else:
                                 # Για άλλους λογαριασμούς (Νερό, Ρεύμα)
                                 short_type = p_type[:6] + "." if len(p_type) > 8 else p_type
                                 if is_pending:
-                                    btn_text = f"{short_type}\n⚠️ Εκκρεμεί"
+                                    btn_text = f"\n⚠️{short_type} Εκκρεμεί"
                                 else:
                                     btn_text = f"\n✅{short_type} Εξοφλ."
                                     
