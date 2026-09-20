@@ -3,6 +3,9 @@ import gsheets_service
 import pandas as pd
 import uuid
 
+MONTHS_DICT = {1:"Ιανουάριος", 2:"Φεβρουάριος", 3:"Μάρτιος", 4:"Απρίλιος", 5:"Μάιος", 6:"Ιούνιος", 
+               7:"Ιούλιος", 8:"Αύγουστος", 9:"Σεπτέμβριος", 10:"Οκτώβριος", 11:"Νοέμβριος", 12:"Δεκέμβριος"}
+
 def show():
     st.header("Μητρώο")
     st.caption("Διαχείριση και επισκόπηση του χαρτοφυλακίου ακινήτων και του πελατολογίου.")
@@ -34,10 +37,13 @@ def show():
                         if p_display.endswith(',0'): p_display = p_display[:-2]
                         owners_list.append(f"{n} {s} ({r} {p_display}%)")
                 
+                e_months_raw = str(prop.get("Extra_Bills_Months", ""))
+                e_months_text = ", ".join([MONTHS_DICT[int(m)] for m in e_months_raw.split(',') if m.strip().isdigit()])
+                
                 prop_data.append({
                     "Χαρακτηριστικό": prop.get("Χαρακτηριστικό", "-"),
                     "Διεύθυνση": f"{prop.get('Διεύθυνση', '')} {prop.get('Αριθμός', '')}",
-                    "Περιοχή": prop.get("Περιοχή/Δήμος", ""),
+                    "Μήνες Λογαριασμών": e_months_text if e_months_text else "-",
                     "Ιδιοκτησιακό Καθεστώς": " | ".join(owners_list) if owners_list else "Μη ορισμένο"
                 })
             st.dataframe(pd.DataFrame(prop_data), use_container_width=True, hide_index=True)
@@ -75,6 +81,9 @@ def show():
             with col3: floor = st.text_input("Όροφος")
             with col4: sqm_input = st.text_input("Επιφάνεια (m2) *", value="0")
             
+            st.subheader("Ημερολόγιο Εξόδων (Προαιρετικό)")
+            extra_months = st.multiselect("Επιλέξτε Μήνες που εκδίδονται Λογαριασμοί (π.χ. Νερό, Κοινόχρηστα)", options=list(MONTHS_DICT.keys()), format_func=lambda x: MONTHS_DICT[x])
+            
             st.subheader("Ιδιοκτήτες & Δικαιώματα")
             owner_data = []
             for i in range(1, 4):
@@ -93,10 +102,11 @@ def show():
                 if pd.isna(sqm_val): sqm_val = 0.0
                 if charact and atak and address and sqm_val > 0 and owner_data[0]:
                     try:
-                        gsheets_service.add_property([f"PR-{uuid.uuid4().hex[:6].upper()}", atak, nomos, dimos, address, number, floor, sqm_input, charact] + owner_data)
+                        extra_str = ",".join(map(str, extra_months))
+                        gsheets_service.add_property([f"PR-{uuid.uuid4().hex[:6].upper()}", atak, nomos, dimos, address, number, floor, sqm_input, charact] + owner_data + [extra_str])
                         st.success("Το ακίνητο αποθηκεύτηκε επιτυχώς!")
                     except Exception as e: st.error(f"Σφάλμα: {e}")
-                else: st.warning("Συμπληρώστε τα υποχρεωτικά πεδία (έγκυρη επιφάνεια) και τον 1ο Ιδιοκτήτη.")
+                else: st.warning("Συμπληρώστε τα υποχρεωτικά πεδία και τον 1ο Ιδιοκτήτη.")
 
     with tab_prop_edit:
         if properties_df.empty: st.warning("Δεν υπάρχουν ακίνητα.")
@@ -116,6 +126,11 @@ def show():
                     with ec3: e_floor = st.text_input("Όροφος", value=str(sel_prop.get("Όροφος", "")))
                     with ec4: e_sqm = st.text_input("Επιφάνεια (m2)", value=str(sel_prop.get("Επιφάνεια m2", "")))
                     
+                    st.subheader("Ημερολόγιο Εξόδων (Προαιρετικό)")
+                    sel_extra_raw = str(sel_prop.get("Extra_Bills_Months", ""))
+                    sel_extra_defs = [int(x.strip()) for x in sel_extra_raw.split(',') if x.strip().isdigit()]
+                    e_extra_months = st.multiselect("Επιλέξτε Μήνες που εκδίδονται Λογαριασμοί", options=list(MONTHS_DICT.keys()), default=sel_extra_defs, format_func=lambda x: MONTHS_DICT[x])
+
                     st.subheader("Ιδιοκτήτες")
                     e_owner_data = []
                     for i in range(1, 4):
@@ -142,7 +157,8 @@ def show():
 
                 if update_btn:
                     try:
-                        gsheets_service.update_property(selected_edit_id, [selected_edit_id, e_atak, e_nomos, e_dimos, e_address, e_number, e_floor, e_sqm, e_charact] + e_owner_data)
+                        e_extra_str = ",".join(map(str, e_extra_months))
+                        gsheets_service.update_property(selected_edit_id, [selected_edit_id, e_atak, e_nomos, e_dimos, e_address, e_number, e_floor, e_sqm, e_charact] + e_owner_data + [e_extra_str])
                         st.success("Αποθηκεύτηκαν! Ανανεώστε (Refresh) τη σελίδα.")
                     except Exception as e: st.error(f"Σφάλμα: {e}")
 
