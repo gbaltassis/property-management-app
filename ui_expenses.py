@@ -39,12 +39,15 @@ def show():
 
     # --- 1. ΝΕΟ ΕΞΟΔΟ ---
     with tab_new:
+        cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
+        
+        # ΛΥΣΗ: Η Κατηγορία Εξόδου τοποθετείται ΕΞΩ από τη φόρμα για να είναι 100% δυναμική!
+        category = st.selectbox("Κατηγορία Εξόδου *", cat_opts)
+        
+        st.markdown("---")
+        
         with st.form("new_expense_form", clear_on_submit=True):
-            cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
-            category = st.selectbox("Κατηγορία Εξόδου *", cat_opts)
-            
-            st.markdown("---")
-            # Δυναμικά πεδία
+            # Δυναμικά πεδία ανάλογα την επιλογή
             afm_sel, prop_sel = "", ""
             if category == "ΕΝΦΙΑ":
                 afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", list(owner_afms)) if owner_afms else st.text_input("ΑΦΜ Ιδιοκτήτη *")
@@ -72,7 +75,7 @@ def show():
                     with bc1: ins_build = st.text_input("Κεφάλαιο Κτιρίου (€)", value="0")
                     with bc2: ins_cont = st.text_input("Κεφάλαιο Περιεχομένου (€)", value="0")
 
-            if st.form_submit_button("Αποθήκευση Εξόδου", type="primary"):
+            if st.form_submit_button("Αποθήκευση Εξόδου", type="primary", use_container_width=True):
                 amt_val = pd.to_numeric(amount.replace(',', '.'), errors='coerce')
                 if pd.isna(amt_val) or amt_val <= 0:
                     st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
@@ -120,4 +123,5 @@ def show():
             if sel_exp:
                 if st.button("🗑️ Οριστική Διαγραφή Εξόδου", type="primary"):
                     gsheets_service.delete_expense(sel_exp)
-                    st.success("Διαγράφηκε! Ανανεώστε τη σελίδα.")
+                    st.success("Διαγράφηκε! Η σελίδα ανανεώνεται...")
+                    st.rerun()
