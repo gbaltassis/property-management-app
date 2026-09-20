@@ -29,7 +29,6 @@ def show():
         if not prop_match.empty:
             prop = prop_match.iloc[0]
             charact = str(prop.get('Χαρακτηριστικό', '-'))
-            
             owners_str = []
             for i in range(1, 4):
                 n = prop.get(f'Name_{i}', '')
@@ -74,21 +73,29 @@ def show():
             days_rem = (end_date - today).days
             if days_rem <= 60:
                 expiring_count += 1
-                t_match = tenants_df[tenants_df["Tenant_ID"] == row["Tenant_ID"]]
-                t_name = f"{t_match.iloc[0]['Όνομα']} {t_match.iloc[0]['Επώνυμο']}" if not t_match.empty else "Άγνωστος"
+                
+                # Διαχωρισμός πολλαπλών ενοικιαστών
+                t_ids = str(row.get("Tenant_ID", "")).split(',')
+                t_names = []
+                for tid in t_ids:
+                    t_match = tenants_df[tenants_df["Tenant_ID"] == tid.strip()]
+                    if not t_match.empty:
+                        t_names.append(f"{t_match.iloc[0]['Όνομα']} {t_match.iloc[0]['Επώνυμο']}")
+                t_name = " & ".join(t_names) if t_names else "Άγνωστος"
+                
                 p_match = properties_df[properties_df["Property_ID"] == row["Property_ID"]]
                 p_addr = f"{p_match.iloc[0]['Διεύθυνση']} {p_match.iloc[0]['Αριθμός']}" if not p_match.empty else "Άγνωστο"
                 
                 if days_rem < 0:
-                    st.error(f"ΕΛΗΞΕ ΠΡΙΝ {-days_rem} ΜΕΡΕΣ: {p_addr} | Ενοικιαστής: {t_name}")
+                    st.error(f"ΕΛΗΞΕ ΠΡΙΝ {-days_rem} ΜΕΡΕΣ: {p_addr} | Ενοικιαστές: {t_name}")
                 else:
-                    st.warning(f"ΛΗΓΕΙ ΣΕ {days_rem} ΜΕΡΕΣ: {p_addr} | Ενοικιαστής: {t_name}")
+                    st.warning(f"ΛΗΓΕΙ ΣΕ {days_rem} ΜΕΡΕΣ: {p_addr} | Ενοικιαστές: {t_name}")
 
     if expiring_count == 0:
         st.success("Καμία μίσθωση δεν λήγει τις επόμενες 60 ημέρες. Όλα βαίνουν καλώς! 🌿")
     st.divider()
 
-    # --- 3. ΦΟΡΟΛΟΓΙΚΗ ΕΚΤΙΜΗΣΗ (ΕΤΗΣΙΑ) ΑΝΑ ΙΔΙΟΚΤΗΤΗ ---
+    # --- 3. ΦΟΡΟΛΟΓΙΚΗ ΕΚΤΙΜΗΣΗ ---
     st.subheader("💡 Εκτίμηση Φόρου & Καθαρών Εσόδων (Ετήσια)")
     
     income_per_owner = {}
@@ -105,7 +112,6 @@ def show():
                 right = str(prop.get(f'Right_{i}', ''))
                 perc = float(prop.get(f'Perc_{i}', 0) if pd.notna(prop.get(f'Perc_{i}', 0)) else 0)
                 
-                # Το εισόδημα πάει μόνο σε Επικαρπία / Πλήρη Κυριότητα
                 if afm and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
                     share_of_rent = rent * (perc / 100.0)
                     if afm not in income_per_owner:
@@ -117,7 +123,6 @@ def show():
 
     for afm, data in income_per_owner.items():
         annual_inc = data["monthly"] * 12
-        
         tax = 0
         if annual_inc <= 12000:
             tax = annual_inc * 0.15
@@ -127,7 +132,6 @@ def show():
             tax = (12000 * 0.15) + (23000 * 0.35) + ((annual_inc - 35000) * 0.45)
             
         net_inc = annual_inc - tax
-        
         st.info(f"**{data['name']} (ΑΦΜ: {afm})**\n\n"
                 f"Ετήσια Μικτά: **{annual_inc:,.2f} €** | "
                 f"Εκτιμώμενος Φόρος: **{tax:,.2f} €** | "
