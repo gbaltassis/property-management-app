@@ -33,14 +33,16 @@ def show():
                     s = str(prop.get(f'Surname_{i}', '')).strip()
                     r = str(prop.get(f'Right_{i}', '')).strip()
                     
-                    # ΑΣΦΑΛΗΣ ΜΕΤΑΤΡΟΠΗ ΠΟΣΟΣΤΟΥ: Αν είναι κενό, γίνεται 0.0
-                    p_val = prop.get(f'Perc_{i}')
+                    # Ασφαλής μετατροπή, δέχεται και κόμμα και τελεία
+                    p_val = str(prop.get(f'Perc_{i}', '')).replace(',', '.')
                     p = pd.to_numeric(p_val, errors='coerce')
                     if pd.isna(p): p = 0.0
                     
-                    # Ελέγχουμε αν υπάρχει όνομα και αν το ποσοστό δεν είναι "NaN" και είναι > 0
                     if n and n != 'nan' and p > 0:
-                        owners_list.append(f"{n} {s} ({r} {p}%)")
+                        # Εμφάνιση του ποσοστού με κόμμα
+                        p_display = str(p).replace('.', ',')
+                        if p_display.endswith(',0'): p_display = p_display[:-2]
+                        owners_list.append(f"{n} {s} ({r} {p_display}%)")
                 
                 owners_info = " | ".join(owners_list) if owners_list else "Δεν έχουν οριστεί ιδιοκτήτες"
 
@@ -63,9 +65,7 @@ def show():
                 t_id = str(tenant.get("Tenant_ID", ""))
                 if t_id and t_id != 'nan':
                     linked_prop_charact = "-"
-                    
                     if not leases_df.empty and not properties_df.empty:
-                        # Ασφαλής αναζήτηση
                         leases_df['Tenant_ID'] = leases_df['Tenant_ID'].astype(str)
                         t_leases = leases_df[leases_df["Tenant_ID"].str.contains(t_id, na=False, regex=False)]
                         if not t_leases.empty:
@@ -84,8 +84,6 @@ def show():
                     })
             if tenant_data:
                 st.dataframe(pd.DataFrame(tenant_data), use_container_width=True, hide_index=True)
-            else:
-                st.info("Δεν βρέθηκαν έγκυρα δεδομένα ενοικιαστών.")
 
     # --- ΚΑΡΤΕΛΑ 3: ΦΟΡΜΑ ΝΕΟΥ ΑΚΙΝΗΤΟΥ ---
     with tab_prop_new:
@@ -101,7 +99,9 @@ def show():
             
             col3, col4 = st.columns(2)
             with col3: floor = st.text_input("Όροφος")
-            with col4: sqm = st.number_input("Επιφάνεια (m2) *", min_value=0.0, step=1.0)
+            with col4: 
+                # ΑΛΛΑΓΗ: text_input για επιφάνεια
+                sqm_input = st.text_input("Επιφάνεια (m2) *", value="0")
             
             st.subheader("Ιδιοκτήτες & Δικαιώματα")
             owner_data = []
@@ -113,22 +113,28 @@ def show():
                     c3, c4, c5 = st.columns(3)
                     afm = c3.text_input(f"ΑΦΜ", key=f"afm{i}")
                     right = c4.selectbox(f"Είδος", ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"], key=f"r{i}")
-                    perc = c5.number_input(f"Ποσοστό %", min_value=0.0, max_value=100.0, value=100.0 if i==1 else 0.0, step=1.0, key=f"p{i}")
-                    owner_data.extend([n, s, afm, right, perc])
+                    # ΑΛΛΑΓΗ: text_input για το ποσοστό, επιτρέπει κόμμα
+                    perc_input = c5.text_input(f"Ποσοστό %", value="100" if i==1 else "0", key=f"p{i}")
+                    owner_data.extend([n, s, afm, right, perc_input])
                 
             submit_prop = st.form_submit_button("Αποθήκευση Ακινήτου", use_container_width=True)
             
             if submit_prop:
-                if charact and atak and address and sqm > 0 and owner_data[0]:
+                # Μετατροπή επιφάνειας για τον έλεγχο
+                sqm_val = pd.to_numeric(sqm_input.replace(',', '.'), errors='coerce')
+                if pd.isna(sqm_val): sqm_val = 0.0
+
+                if charact and atak and address and sqm_val > 0 and owner_data[0]:
                     prop_id = f"PR-{uuid.uuid4().hex[:6].upper()}"
-                    row_data = [prop_id, atak, nomos, dimos, address, number, floor, sqm, charact] + owner_data
+                    # Αποθηκεύουμε τα δεδομένα όπως τα έγραψε ο χρήστης (με κόμμα αν έβαλε κόμμα)
+                    row_data = [prop_id, atak, nomos, dimos, address, number, floor, sqm_input, charact] + owner_data
                     try:
                         gsheets_service.add_property(row_data)
                         st.success("Το ακίνητο αποθηκεύτηκε επιτυχώς!")
                     except Exception as e:
                         st.error(f"Σφάλμα: {e}")
                 else:
-                    st.warning("Συμπληρώστε τα υποχρεωτικά πεδία και τον 1ο Ιδιοκτήτη.")
+                    st.warning("Συμπληρώστε τα υποχρεωτικά πεδία (έγκυρη επιφάνεια) και τον 1ο Ιδιοκτήτη.")
 
     # --- ΚΑΡΤΕΛΑ 4: ΦΟΡΜΑ ΝΕΟΥ ΕΝΟΙΚΙΑΣΤΗ ---
     with tab_tenant_new:
