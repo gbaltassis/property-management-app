@@ -68,6 +68,7 @@ def add_payment(payment_data):
     fetch_all_payments.clear()
 
 # --- Συναρτήσεις Επεξεργασίας & Διαγραφής ---
+# ΑΛΛΑΓΗ: Χρήση γενικού Exception αντί για gspread.exceptions.CellNotFound
 def update_row_by_id(sheet_name, row_id, new_data_row, cache_func):
     ws = get_worksheet(sheet_name)
     try:
@@ -75,8 +76,8 @@ def update_row_by_id(sheet_name, row_id, new_data_row, cache_func):
         for idx, val in enumerate(new_data_row):
             ws.update_cell(cell.row, idx + 1, val)
         cache_func.clear()
-    except gspread.exceptions.CellNotFound:
-        raise Exception(f"Δεν βρέθηκε εγγραφή με ID: {row_id} στο {sheet_name}")
+    except Exception as e:
+        raise Exception(f"Δεν βρέθηκε εγγραφή με ID: {row_id} στο {sheet_name}. Λεπτομέρειες: {e}")
 
 def delete_row_by_id(sheet_name, row_id, cache_func):
     ws = get_worksheet(sheet_name)
@@ -84,8 +85,8 @@ def delete_row_by_id(sheet_name, row_id, cache_func):
         cell = ws.find(row_id, in_column=1)
         ws.delete_rows(cell.row)
         cache_func.clear()
-    except gspread.exceptions.CellNotFound:
-        raise Exception(f"Η εγγραφή {row_id} δεν βρέθηκε για διαγραφή.")
+    except Exception as e:
+        raise Exception(f"Η εγγραφή {row_id} δεν βρέθηκε για διαγραφή. Λεπτομέρειες: {e}")
 
 def update_property(p_id, row): update_row_by_id("Properties", p_id, row, fetch_all_properties)
 def delete_property(p_id): delete_row_by_id("Properties", p_id, fetch_all_properties)
