@@ -26,7 +26,27 @@ def show():
             lease_list_data = []
             for _, row in leases_df.iterrows():
                 p_match = properties_df[properties_df["Property_ID"] == str(row.get("Property_ID", ""))]
-                prop_charact = str(p_match.iloc[0].get("Χαρακτηριστικό", "-")) if not p_match.empty else "-"
+                
+                # Αρχικοποίηση Χαρακτηριστικού και Ιδιοκτητών
+                prop_charact = "-"
+                owners_str = "-"
+                
+                if not p_match.empty:
+                    prop = p_match.iloc[0]
+                    prop_charact = str(prop.get("Χαρακτηριστικό", "-"))
+                    
+                    # Αναζήτηση των ιδιοκτητών (μέχρι 3)
+                    owners_list = []
+                    for i in range(1, 4):
+                        n = str(prop.get(f'Name_{i}', '')).strip()
+                        s = str(prop.get(f'Surname_{i}', '')).strip()
+                        p_val = pd.to_numeric(str(prop.get(f'Perc_{i}', '')).replace(',', '.'), errors='coerce')
+                        
+                        if n and pd.notna(p_val) and p_val > 0:
+                            owners_list.append(f"{n} {s}")
+                            
+                    if owners_list:
+                        owners_str = " & ".join(owners_list)
                 
                 t_names = []
                 for tid_clean in [t.strip() for t in str(row.get("Tenant_ID", "")).split(',') if t.strip()]:
@@ -47,6 +67,7 @@ def show():
                 lease_list_data.append({
                     "Κατάσταση": status,
                     "Ακίνητο": prop_charact,
+                    "Ιδιοκτήτης": owners_str,
                     "Ενοικιαστής": " & ".join(t_names) if t_names else "Άγνωστος",
                     "Έναρξη": row.get("Start_Date", "-"),
                     "Λήξη": row.get("End_Date", "-"),
