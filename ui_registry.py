@@ -96,7 +96,7 @@ def show():
             st.subheader("Ιδιοκτήτες & Δικαιώματα")
             owner_data = []
             for i in range(1, 4):
-                with st.expander(f"Εγγραφή Δικαιώματος {i}", expanded=(i==1)):
+                with st.expander(f"Ιδιοκτήτης {i}", expanded=(i==1)):
                     c1, c2 = st.columns(2)
                     n = c1.text_input(f"Όνομα", key=f"n{i}")
                     s = c2.text_input(f"Επώνυμο", key=f"s{i}")
