@@ -12,7 +12,7 @@ def show():
         properties_df = gsheets_service.fetch_all_properties()
         tenants_df = gsheets_service.fetch_all_tenants()
     except Exception as e:
-        st.error("Αδυναμία φόρτωσης δεδομένων.")
+        st.error(f"Αδυναμία φόρτωσης δεδομένων: {e}")
         return
 
     if leases_df.empty:
@@ -31,22 +31,32 @@ def show():
             charact = str(prop.get('Χαρακτηριστικό', '-'))
             owners_str = []
             for i in range(1, 4):
-                n = prop.get(f'Name_{i}', '')
-                s = prop.get(f'Surname_{i}', '')
-                r = prop.get(f'Right_{i}', '')
-                p = prop.get(f'Perc_{i}', 0)
-                if pd.notna(n) and str(n).strip() and pd.notna(p) and float(p) > 0:
+                n = str(prop.get(f'Name_{i}', '')).strip()
+                s = str(prop.get(f'Surname_{i}', '')).strip()
+                r = str(prop.get(f'Right_{i}', '')).strip()
+                
+                # ΑΣΦΑΛΗΣ ΜΕΤΑΤΡΟΠΗ ΠΟΣΟΣΤΟΥ
+                p_val = prop.get(f'Perc_{i}')
+                p = pd.to_numeric(p_val, errors='coerce')
+                if pd.isna(p): p = 0.0
+
+                if n and n != 'nan' and p > 0:
                     owners_str.append(f"{n} {s} ({r} {p}%)")
         else:
             charact = "-"
             owners_str = []
+
+        # ΑΣΦΑΛΗΣ ΜΕΤΑΤΡΟΠΗ ΕΝΟΙΚΙΟΥ
+        rent_val = lease.get('Monthly_Rent', 0)
+        safe_rent = pd.to_numeric(rent_val, errors='coerce')
+        if pd.isna(safe_rent): safe_rent = 0.0
 
         table_data.append({
             "Ακίνητο": charact,
             "Ιδιοκτήτες / Δικαιώματα": " | ".join(owners_str) if owners_str else "-",
             "Έναρξη": lease.get('Start_Date', ''),
             "Λήξη": lease.get('End_Date', ''),
-            "Μίσθωμα": f"{float(lease.get('Monthly_Rent', 0)):.2f} €"
+            "Μίσθωμα": f"{safe_rent:.2f} €"
         })
         
     st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
@@ -74,7 +84,6 @@ def show():
             if days_rem <= 60:
                 expiring_count += 1
                 
-                # Διαχωρισμός πολλαπλών ενοικιαστών
                 t_ids = str(row.get("Tenant_ID", "")).split(',')
                 t_names = []
                 for tid in t_ids:
@@ -101,18 +110,24 @@ def show():
     income_per_owner = {}
     
     for _, lease in leases_df.iterrows():
-        rent = float(lease.get('Monthly_Rent', 0))
+        rent_val = lease.get('Monthly_Rent', 0)
+        rent = pd.to_numeric(rent_val, errors='coerce')
+        if pd.isna(rent): rent = 0.0
+        
         prop_match = properties_df[properties_df['Property_ID'] == lease['Property_ID']]
         
         if not prop_match.empty:
             prop = prop_match.iloc[0]
             for i in range(1, 4):
                 afm = str(prop.get(f'AFM_{i}', '')).strip()
-                name = f"{prop.get(f'Name_{i}', '')} {prop.get(f'Surname_{i}', '')}".strip()
-                right = str(prop.get(f'Right_{i}', ''))
-                perc = float(prop.get(f'Perc_{i}', 0) if pd.notna(prop.get(f'Perc_{i}', 0)) else 0)
+                name = f"{str(prop.get(f'Name_{i}', '')).strip()} {str(prop.get(f'Surname_{i}', '')).strip()}".strip()
+                right = str(prop.get(f'Right_{i}', '')).strip()
                 
-                if afm and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
+                p_val = prop.get(f'Perc_{i}')
+                perc = pd.to_numeric(p_val, errors='coerce')
+                if pd.isna(perc): perc = 0.0
+                
+                if afm and afm != 'nan' and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
                     share_of_rent = rent * (perc / 100.0)
                     if afm not in income_per_owner:
                         income_per_owner[afm] = {"name": name, "monthly": 0}
@@ -132,7 +147,7 @@ def show():
             tax = (12000 * 0.15) + (23000 * 0.35) + ((annual_inc - 35000) * 0.45)
             
         net_inc = annual_inc - tax
-        st.info(f"**{data['name']} (ΑΦΜ: {afm})**\n\n"
+        st.info(f"**{data['name'].replace('nan', '').strip()} (ΑΦΜ: {afm})**\n\n"
                 f"Ετήσια Μικτά: **{annual_inc:,.2f} €** | "
                 f"Εκτιμώμενος Φόρος: **{tax:,.2f} €** | "
                 f"Καθαρά Έσοδα: **{net_inc:,.2f} €**")
