@@ -175,10 +175,12 @@ def show():
             # Κλίμακα 45% για 35.001€ και άνω
             if annual_inc <= 12000:
                 tax = annual_inc * 0.15
+            elif annual_inc <= 24000:
+                tax = (12000 * 0.15) + ((annual_inc - 12000) * 0.25)
             elif annual_inc <= 35000:
-                tax = (12000 * 0.15) + ((annual_inc - 12000) * 0.35)
+                tax = (12000 * 0.15) + (12000 * 0.25) + ((annual_inc - 24000) * 0.35)
             else:
-                tax = (12000 * 0.15) + (23000 * 0.35) + ((annual_inc - 35000) * 0.45)
+                tax = (12000 * 0.15) + (12000 * 0.25) + (11000 * 0.35) + ((annual_inc - 35000) * 0.45)
                 
             net_inc = annual_inc - tax
             
