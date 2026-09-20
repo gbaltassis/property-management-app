@@ -13,7 +13,7 @@ def show():
         tenants_df = gsheets_service.fetch_all_tenants()
         properties_df = gsheets_service.fetch_all_properties()
     except Exception as e:
-        st.error("Αδυναμία φόρτωσης δεδομένων. Ελέγξτε τη σύνδεση με το Google Sheet.")
+        st.error(f"Αδυναμία φόρτωσης δεδομένων: {e}")
         return
 
     if leases_df.empty:
@@ -22,26 +22,41 @@ def show():
 
     lease_options = {}
     for index, row in leases_df.iterrows():
-        l_id = row.get("Lease_ID")
-        p_id = row.get("Property_ID")
+        l_id = str(row.get("Lease_ID", ""))
+        p_id = str(row.get("Property_ID", ""))
         
-        # Λογική για πολλαπλούς ενοικιαστές
+        if not l_id or l_id == 'nan':
+            continue
+            
         t_ids = str(row.get("Tenant_ID", "")).split(',')
         t_names = []
         for tid in t_ids:
-            t_match = tenants_df[tenants_df["Tenant_ID"] == tid.strip()]
-            if not t_match.empty:
-                t_names.append(f"{t_match.iloc[0]['Όνομα']} {t_match.iloc[0]['Επώνυμο']}")
+            tid_clean = tid.strip()
+            if tid_clean:
+                tenants_df['Tenant_ID'] = tenants_df['Tenant_ID'].astype(str)
+                t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
+                if not t_match.empty:
+                    fname = str(t_match.iloc[0].get('Όνομα', '')).replace('nan', '').strip()
+                    lname = str(t_match.iloc[0].get('Επώνυμο', '')).replace('nan', '').strip()
+                    t_names.append(f"{fname} {lname}")
         tenant_name = " & ".join(t_names) if t_names else "Άγνωστος"
         
         prop_address = "Άγνωστο Ακίνητο"
         if not properties_df.empty and "Property_ID" in properties_df.columns:
+            properties_df['Property_ID'] = properties_df['Property_ID'].astype(str)
             p_match = properties_df[properties_df["Property_ID"] == p_id]
             if not p_match.empty:
-                prop_address = f"{p_match.iloc[0].get('Χαρακτηριστικό', '')} ({p_match.iloc[0].get('Διεύθυνση', '')} {p_match.iloc[0].get('Αριθμός', '')})"
+                charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '')).replace('nan', '')
+                addr = str(p_match.iloc[0].get('Διεύθυνση', '')).replace('nan', '')
+                num = str(p_match.iloc[0].get('Αριθμός', '')).replace('nan', '')
+                prop_address = f"{charact} ({addr} {num})".strip(' ()')
                 
         display_text = f"{tenant_name} | {prop_address}"
         lease_options[l_id] = display_text
+
+    if not lease_options:
+        st.info("Δεν βρέθηκαν έγκυρα δεδομένα μισθώσεων.")
+        return
 
     with st.form("new_payment_form", clear_on_submit=True):
         selected_lease_id = st.selectbox(
