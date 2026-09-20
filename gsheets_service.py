@@ -76,3 +76,28 @@ def add_payment(payment_data):
     ws = get_worksheet("Payments")
     ws.append_row(payment_data)
     fetch_all_payments.clear() # Καθαρίζει τη μνήμη
+
+# --- Συναρτήσεις Επεξεργασίας & Διαγραφής ---
+
+def update_property(property_id, new_data_row):
+    """Ενημερώνει μια υπάρχουσα γραμμή ακινήτου με βάση το Property_ID."""
+    ws = get_worksheet("Properties")
+    # Ψάχνουμε να βρούμε σε ποια γραμμή βρίσκεται αυτό το ID (στήλη 1)
+    try:
+        cell = ws.find(property_id, in_column=1)
+        # Κάνουμε update όλη τη γραμμή με τα νέα δεδομένα (ξεκινώντας από τη στήλη 1)
+        for idx, val in enumerate(new_data_row):
+            ws.update_cell(cell.row, idx + 1, val)
+        fetch_all_properties.clear() # Καθαρίζουμε τη μνήμη cache
+    except gspread.exceptions.CellNotFound:
+        raise Exception(f"Δεν βρέθηκε ακίνητο με ID: {property_id}")
+
+def delete_property(property_id):
+    """Διαγράφει ένα ακίνητο από το Google Sheet."""
+    ws = get_worksheet("Properties")
+    try:
+        cell = ws.find(property_id, in_column=1)
+        ws.delete_rows(cell.row)
+        fetch_all_properties.clear()
+    except gspread.exceptions.CellNotFound:
+        raise Exception("Το ακίνητο δεν βρέθηκε για διαγραφή.")
