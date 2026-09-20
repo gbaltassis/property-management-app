@@ -98,8 +98,8 @@ def show():
             for i in range(1, 4):
                 with st.expander(f"Εγγραφή Δικαιώματος {i}", expanded=(i==1)):
                     c1, c2 = st.columns(2)
-                    n = c1.text_input(f"Όνομα", key=f"n{i}", value="Γιώργος" if i==1 else "")
-                    s = c2.text_input(f"Επώνυμο", key=f"s{i}", value="Μπαλτάσης" if i==1 else "")
+                    n = c1.text_input(f"Όνομα", key=f"n{i}", value="-" if i==1 else "")
+                    s = c2.text_input(f"Επώνυμο", key=f"s{i}", value="-" if i==1 else "")
                     c3, c4, c5 = st.columns(3)
                     afm = c3.text_input(f"ΑΦΜ", key=f"afm{i}")
                     right = c4.selectbox(f"Είδος", ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"], key=f"r{i}")
