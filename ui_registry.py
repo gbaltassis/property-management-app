@@ -29,12 +29,17 @@ def show():
             for _, prop in properties_df.iterrows():
                 owners_list = []
                 for i in range(1, 4):
-                    n = prop.get(f'Name_{i}', '')
-                    s = prop.get(f'Surname_{i}', '')
-                    r = prop.get(f'Right_{i}', '')
-                    p = prop.get(f'Perc_{i}', 0)
+                    n = str(prop.get(f'Name_{i}', '')).strip()
+                    s = str(prop.get(f'Surname_{i}', '')).strip()
+                    r = str(prop.get(f'Right_{i}', '')).strip()
                     
-                    if pd.notna(n) and str(n).strip() and pd.notna(p) and float(p) > 0:
+                    # ΑΣΦΑΛΗΣ ΜΕΤΑΤΡΟΠΗ ΠΟΣΟΣΤΟΥ: Αν είναι κενό, γίνεται 0.0
+                    p_val = prop.get(f'Perc_{i}')
+                    p = pd.to_numeric(p_val, errors='coerce')
+                    if pd.isna(p): p = 0.0
+                    
+                    # Ελέγχουμε αν υπάρχει όνομα και αν το ποσοστό δεν είναι "NaN" και είναι > 0
+                    if n and n != 'nan' and p > 0:
                         owners_list.append(f"{n} {s} ({r} {p}%)")
                 
                 owners_info = " | ".join(owners_list) if owners_list else "Δεν έχουν οριστεί ιδιοκτήτες"
@@ -55,28 +60,32 @@ def show():
         else:
             tenant_data = []
             for _, tenant in tenants_df.iterrows():
-                t_id = str(tenant.get("Tenant_ID"))
-                linked_prop_charact = "-"
-                
-                # Διασταύρωση: Ψάχνουμε αν το t_id υπάρχει μέσα στο κείμενο των Tenant_ID της μίσθωσης
-                if not leases_df.empty and not properties_df.empty:
-                    # Χρήση regex=False για ασφαλή αναζήτηση μέσα στο string (π.χ. "TN-123, TN-456")
-                    t_leases = leases_df[leases_df["Tenant_ID"].astype(str).str.contains(t_id, na=False, regex=False)]
-                    if not t_leases.empty:
-                        p_id = t_leases.iloc[-1]["Property_ID"]
-                        p_match = properties_df[properties_df["Property_ID"] == p_id]
-                        if not p_match.empty:
-                            linked_prop_charact = p_match.iloc[0].get("Χαρακτηριστικό", "-")
+                t_id = str(tenant.get("Tenant_ID", ""))
+                if t_id and t_id != 'nan':
+                    linked_prop_charact = "-"
+                    
+                    if not leases_df.empty and not properties_df.empty:
+                        # Ασφαλής αναζήτηση
+                        leases_df['Tenant_ID'] = leases_df['Tenant_ID'].astype(str)
+                        t_leases = leases_df[leases_df["Tenant_ID"].str.contains(t_id, na=False, regex=False)]
+                        if not t_leases.empty:
+                            p_id = t_leases.iloc[-1]["Property_ID"]
+                            p_match = properties_df[properties_df["Property_ID"] == p_id]
+                            if not p_match.empty:
+                                linked_prop_charact = p_match.iloc[0].get("Χαρακτηριστικό", "-")
 
-                tenant_data.append({
-                    "Επώνυμο": tenant.get("Επώνυμο", ""),
-                    "Όνομα": tenant.get("Όνομα", ""),
-                    "ΑΦΜ": tenant.get("ΑΦΜ", ""),
-                    "Κινητό": tenant.get("Κινητό", "-"),
-                    "Email": tenant.get("Email", "-"),
-                    "Συνδεδεμένο Ακίνητο": linked_prop_charact
-                })
-            st.dataframe(pd.DataFrame(tenant_data), use_container_width=True, hide_index=True)
+                    tenant_data.append({
+                        "Επώνυμο": str(tenant.get("Επώνυμο", "")).replace('nan', ''),
+                        "Όνομα": str(tenant.get("Όνομα", "")).replace('nan', ''),
+                        "ΑΦΜ": str(tenant.get("ΑΦΜ", "")).replace('nan', ''),
+                        "Κινητό": str(tenant.get("Κινητό", "-")).replace('nan', '-'),
+                        "Email": str(tenant.get("Email", "-")).replace('nan', '-'),
+                        "Συνδεδεμένο Ακίνητο": linked_prop_charact
+                    })
+            if tenant_data:
+                st.dataframe(pd.DataFrame(tenant_data), use_container_width=True, hide_index=True)
+            else:
+                st.info("Δεν βρέθηκαν έγκυρα δεδομένα ενοικιαστών.")
 
     # --- ΚΑΡΤΕΛΑ 3: ΦΟΡΜΑ ΝΕΟΥ ΑΚΙΝΗΤΟΥ ---
     with tab_prop_new:
