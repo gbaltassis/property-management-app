@@ -3,17 +3,36 @@ import gsheets_service
 import pandas as pd
 from datetime import datetime
 
-# Ρύθμιση για αυτόματη αναδίπλωση κειμένου (wrap text) στους πίνακες
-st.markdown("""
+COMMON_CSS = """
 <style>
-    .dataframe td {
-        white-space: pre-wrap !important;
+    .custom-table {
+        width: 100% !important;
+        border-collapse: collapse;
+        font-family: sans-serif;
+        font-size: 14px;
+        margin-bottom: 2rem;
+    }
+    .custom-table th {
+        text-align: left !important;
+        background-color: #f0f2f6;
+        padding: 12px;
+        border-bottom: 1px solid #e6e9ef;
+        color: #31333F;
+    }
+    .custom-table td {
+        text-align: left !important;
         word-wrap: break-word !important;
+        white-space: normal !important;
+        padding: 12px;
+        border-bottom: 1px solid #e6e9ef;
+        color: #31333F;
+        vertical-align: top;
     }
 </style>
-""", unsafe_allow_html=True)
+"""
 
 def show():
+    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Επισκόπηση & Ειδοποιήσεις")
     
     try:
@@ -40,7 +59,6 @@ def show():
     income_per_owner = {}
     
     for _, lease in leases_df.iterrows():
-        # --- ΣΤΟΙΧΕΙΑ ΑΚΙΝΗΤΟΥ & ΙΔΙΟΚΤΗΤΩΝ ---
         prop_match = properties_df[properties_df['Property_ID'] == lease['Property_ID']]
         if not prop_match.empty:
             prop = prop_match.iloc[0]
@@ -51,19 +69,18 @@ def show():
                 n = str(prop.get(f'Name_{i}', '')).strip()
                 s = str(prop.get(f'Surname_{i}', '')).strip()
                 r = str(prop.get(f'Right_{i}', '')).strip()
-                
-                # Ασφαλής μετατροπή ποσοστού, αντικατάσταση κόμματος με τελεία
                 p_raw = str(prop.get(f'Perc_{i}', '')).replace(',', '.')
                 p = pd.to_numeric(p_raw, errors='coerce')
                 if pd.isna(p): p = 0.0
 
-                if n and n != 'nan' and p > 0:
-                    owners_str.append(f"{n} {s} ({r} {p}%)")
+                if n and p > 0:
+                    p_display = str(p).replace('.', ',')
+                    if p_display.endswith(',0'): p_display = p_display[:-2]
+                    owners_str.append(f"{n} {s} ({r} {p_display}%)")
         else:
             charact = "-"
             owners_str = []
 
-        # --- ΣΤΟΙΧΕΙΑ ΜΙΣΘΩΣΗΣ & ΕΝΟΙΚΙΑΣΤΩΝ ---
         rent_raw = str(lease.get('Monthly_Rent', '0')).replace(',', '.')
         safe_rent = pd.to_numeric(rent_raw, errors='coerce')
         if pd.isna(safe_rent): safe_rent = 0.0
@@ -73,7 +90,6 @@ def show():
         for tid in t_ids:
             tid_clean = tid.strip()
             if tid_clean:
-                # Μετατροπή σε string για ασφαλή αναζήτηση
                 tenants_df['Tenant_ID'] = tenants_df['Tenant_ID'].astype(str)
                 t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
                 if not t_match.empty:
@@ -82,17 +98,15 @@ def show():
         
         end_date = lease['End_Date_Obj']
         start_date = str(lease.get('Start_Date', ''))
-        
-        # --- ΥΠΟΛΟΓΙΣΜΟΣ ΚΑΤΑΣΤΑΣΗΣ ΜΙΣΘΩΣΗΣ ---
         days_rem = (end_date - today).days if pd.notnull(end_date) else 999
         
         row_dict = {
             "Ακίνητο": charact,
-            "Ιδιοκτήτες / Δικαιώματα": " | ".join(owners_str) if owners_str else "-",
+            "Ιδιοκτήτες / Δικαιώματα": "<br>".join(owners_str) if owners_str else "-",
             "Ενοικιαστής": tenant_name,
             "Έναρξη": start_date,
             "Λήξη": str(end_date.date()) if pd.notnull(end_date) else "-",
-            "Μίσθωμα": f"{safe_rent:.2f} €"
+            "Μίσθωμα": f"{safe_rent:.2f} €".replace('.', ',')
         }
         
         if days_rem > 30:
@@ -100,11 +114,9 @@ def show():
             active_leases_count += 1
             total_active_rent += safe_rent
             
-            # Φόρος ΜΟΝΟ από τις ενεργές μισθώσεις (>30 μέρες ή γενικά όσες δεν έχουν λήξει)
             if not prop_match.empty:
                 for i in range(1, 4):
                     afm = str(prop.get(f'AFM_{i}', '')).strip()
-                    # Αν ήταν αριθμός (π.χ. 25166077), προσθήκη μηδενικού μπροστά αν το μήκος είναι 8
                     if len(afm) == 8: afm = "0" + afm 
                     
                     name = f"{str(prop.get(f'Name_{i}', '')).strip()} {str(prop.get(f'Surname_{i}', '')).strip()}".strip()
@@ -113,7 +125,7 @@ def show():
                     perc = pd.to_numeric(p_raw, errors='coerce')
                     if pd.isna(perc): perc = 0.0
                     
-                    if afm and afm != 'nan' and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
+                    if afm and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
                         share_of_rent = safe_rent * (perc / 100.0)
                         if afm not in income_per_owner:
                             income_per_owner[afm] = {"name": name, "monthly": 0}
@@ -128,38 +140,34 @@ def show():
             row_dict["Ημέρες Ληγμένη"] = abs(days_rem)
             expired_leases_data.append(row_dict)
 
-
     # --- 1. ΒΑΣΙΚΑ KPI ---
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="Σύνολο Ακινήτων", value=len(properties_df))
-    with col2:
-        st.metric(label="Ενεργές Μισθώσεις", value=active_leases_count)
-    with col3:
-        st.metric(label="Συνολικό Ενοίκιο (Μήνα)", value=f"{total_active_rent:,.2f} €")
+    with col1: st.metric(label="Σύνολο Ακινήτων", value=len(properties_df))
+    with col2: st.metric(label="Ενεργές Μισθώσεις", value=active_leases_count)
+    with col3: st.metric(label="Συνολικό Ενοίκιο (Μήνα)", value=f"{total_active_rent:,.2f} €".replace('.', ','))
     st.divider()
 
-    # --- 2. ΠΙΝΑΚΕΣ ---
+    # --- 2. ΠΙΝΑΚΕΣ ΣΕ HTML ΜΟΡΦΗ ---
     st.subheader("📋 Ενεργές Μισθώσεις (> 30 ημέρες)")
     if active_leases_data:
-        st.dataframe(pd.DataFrame(active_leases_data), use_container_width=True, hide_index=True)
+        st.write(pd.DataFrame(active_leases_data).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
     else:
         st.info("Δεν υπάρχουν μισθώσεις με λήξη άνω των 30 ημερών.")
         
     st.subheader("⚠️ Επερχόμενες Λήξεις Μισθώσεων (0-30 ημέρες)")
     if expiring_leases_data:
-        st.dataframe(pd.DataFrame(expiring_leases_data), use_container_width=True, hide_index=True)
+        st.write(pd.DataFrame(expiring_leases_data).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
     else:
         st.success("Καμία μίσθωση δεν λήγει τις επόμενες 30 ημέρες.")
         
     st.subheader("❌ Ληγμένες Μισθώσεις")
     if expired_leases_data:
-        st.dataframe(pd.DataFrame(expired_leases_data), use_container_width=True, hide_index=True)
+        st.write(pd.DataFrame(expired_leases_data).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
     else:
         st.success("Δεν υπάρχουν ληγμένες μισθώσεις στο σύστημα.")
     st.divider()
 
-    # --- 3. ΦΟΡΟΛΟΓΙΚΗ ΕΚΤΙΜΗΣΗ (Βάσει Νέας Κλίμακας 15%, 35%, 45%) ---
+    # --- 3. ΦΟΡΟΛΟΓΙΚΗ ΕΚΤΙΜΗΣΗ ---
     st.subheader("💡 Εκτίμηση Φόρου & Καθαρών Εσόδων (Ετήσια)")
     
     if not income_per_owner:
@@ -169,9 +177,6 @@ def show():
             annual_inc = data["monthly"] * 12
             tax = 0
             
-            # Κλίμακα 15% για 0 - 12.000€
-            # Κλίμακα 35% για 12.001 - 35.000€
-            # Κλίμακα 45% για 35.001€ και άνω
             if annual_inc <= 12000:
                 tax = annual_inc * 0.15
             elif annual_inc <= 24000:
@@ -183,10 +188,7 @@ def show():
                 
             net_inc = annual_inc - tax
             
-            # Διόρθωση εμφάνισης "nan" στο όνομα
-            display_name = data['name'].replace('nan', '').strip()
-            
-            st.info(f"**{display_name} (ΑΦΜ: {afm})**\n\n"
+            st.info(f"**{data['name']} (ΑΦΜ: {afm})**\n\n"
                     f"Ετήσια Μικτά: **{annual_inc:,.2f} €** | "
                     f"Εκτιμώμενος Φόρος: **{tax:,.2f} €** | "
                     f"Καθαρά Έσοδα: **{net_inc:,.2f} €**")
