@@ -15,7 +15,8 @@ def show():
         st.error("Σφάλμα σύνδεσης.")
         return
 
-    tab_new, tab_list, tab_edit = st.tabs([ "📋 Υπάρχουσες Μισθώσεις", "➕ Νέα Μίσθωση", "✏️ Επεξεργασία Μίσθ."])
+    # ΑΛΛΑΓΗ ΣΕΙΡΑΣ ΕΔΩ: Πρώτα το tab_list, μετά το tab_new
+    tab_list, tab_new, tab_edit = st.tabs(["📋 Υπάρχουσες Μισθώσεις", "➕ Νέα Μίσθωση", "✏️ Επεξεργασία Μίσθ."])
 
     with tab_list:
         if leases_df.empty: st.info("Δεν υπάρχουν καταχωρημένες μισθώσεις.")
