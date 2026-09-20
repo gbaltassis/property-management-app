@@ -46,47 +46,30 @@ def fetch_all_payments():
     if len(data) > 1: return pd.DataFrame(data[1:], columns=data[0])
     return pd.DataFrame(columns=data[0] if data else [])
 
+@st.cache_data(ttl=300)
+def fetch_all_expenses():
+    ws = get_worksheet("Expenses")
+    data = ws.get_all_values()
+    if len(data) > 1: return pd.DataFrame(data[1:], columns=data[0])
+    return pd.DataFrame(columns=data[0] if data else [])
+
 # --- Συναρτήσεις Εγγραφής Δεδομένων ---
-def add_property(property_data):
-    ws = get_worksheet("Properties")
-    ws.append_row(property_data)
-    fetch_all_properties.clear()
+def add_property(data): get_worksheet("Properties").append_row(data); fetch_all_properties.clear()
+def add_tenant(data): get_worksheet("Tenants").append_row(data); fetch_all_tenants.clear()
+def add_lease(data): get_worksheet("Leases").append_row(data); fetch_all_leases.clear()
+def add_payment(data): get_worksheet("Payments").append_row(data); fetch_all_payments.clear()
+def add_expense(data): get_worksheet("Expenses").append_row(data); fetch_all_expenses.clear()
 
-def add_tenant(tenant_data):
-    ws = get_worksheet("Tenants")
-    ws.append_row(tenant_data)
-    fetch_all_tenants.clear()
-    
-def add_lease(lease_data):
-    ws = get_worksheet("Leases")
-    ws.append_row(lease_data)
-    fetch_all_leases.clear()
-    
-def add_payment(payment_data):
-    ws = get_worksheet("Payments")
-    ws.append_row(payment_data)
-    fetch_all_payments.clear()
-
-# --- Συναρτήσεις Επεξεργασίας & Διαγραφής ---
+# --- Συναρτήσεις Επεξεργασίας & Διαγραφής (Batch Update) ---
 def update_row_by_id(sheet_name, row_id, new_data_row, cache_func):
     ws = get_worksheet(sheet_name)
     try:
         cell = ws.find(row_id, in_column=1)
-        
-        # --- ΝΕΟΣ ΤΡΟΠΟΣ: BATCH UPDATE ΜΕ 1 API CALL ---
-        # 1. Βρίσκουμε το εύρος των κελιών της συγκεκριμένης γραμμής
         cell_list = ws.range(cell.row, 1, cell.row, len(new_data_row))
-        
-        # 2. Ενημερώνουμε τις τιμές τοπικά στη μνήμη
-        for i, val in enumerate(new_data_row):
-            cell_list[i].value = str(val)
-            
-        # 3. Τα στέλνουμε ΟΛΑ ΜΑΖΙ στη Google με μία κίνηση!
+        for i, val in enumerate(new_data_row): cell_list[i].value = str(val)
         ws.update_cells(cell_list)
-        
         cache_func.clear()
-    except Exception as e:
-        raise Exception(f"Λεπτομέρειες: {e}")
+    except Exception as e: raise Exception(f"Λεπτομέρειες: {e}")
 
 def delete_row_by_id(sheet_name, row_id, cache_func):
     ws = get_worksheet(sheet_name)
@@ -94,17 +77,15 @@ def delete_row_by_id(sheet_name, row_id, cache_func):
         cell = ws.find(row_id, in_column=1)
         ws.delete_rows(cell.row)
         cache_func.clear()
-    except Exception as e:
-        raise Exception(f"Λεπτομέρειες: {e}")
+    except Exception as e: raise Exception(f"Λεπτομέρειες: {e}")
 
-def update_property(p_id, row): update_row_by_id("Properties", p_id, row, fetch_all_properties)
-def delete_property(p_id): delete_row_by_id("Properties", p_id, fetch_all_properties)
-
-def update_tenant(t_id, row): update_row_by_id("Tenants", t_id, row, fetch_all_tenants)
-def delete_tenant(t_id): delete_row_by_id("Tenants", t_id, fetch_all_tenants)
-
-def update_lease(l_id, row): update_row_by_id("Leases", l_id, row, fetch_all_leases)
-def delete_lease(l_id): delete_row_by_id("Leases", l_id, fetch_all_leases)
-
-def update_payment(pay_id, row): update_row_by_id("Payments", pay_id, row, fetch_all_payments)
-def delete_payment(pay_id): delete_row_by_id("Payments", pay_id, fetch_all_payments)
+def update_property(id, row): update_row_by_id("Properties", id, row, fetch_all_properties)
+def delete_property(id): delete_row_by_id("Properties", id, fetch_all_properties)
+def update_tenant(id, row): update_row_by_id("Tenants", id, row, fetch_all_tenants)
+def delete_tenant(id): delete_row_by_id("Tenants", id, fetch_all_tenants)
+def update_lease(id, row): update_row_by_id("Leases", id, row, fetch_all_leases)
+def delete_lease(id): delete_row_by_id("Leases", id, fetch_all_leases)
+def update_payment(id, row): update_row_by_id("Payments", id, row, fetch_all_payments)
+def delete_payment(id): delete_row_by_id("Payments", id, fetch_all_payments)
+def update_expense(id, row): update_row_by_id("Expenses", id, row, fetch_all_expenses)
+def delete_expense(id): delete_row_by_id("Expenses", id, fetch_all_expenses)
