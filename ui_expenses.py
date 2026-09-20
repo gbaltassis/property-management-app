@@ -35,7 +35,8 @@ def show():
                 name = f"{str(p.get(f'Name_{i}', '')).strip()} {str(p.get(f'Surname_{i}', '')).strip()}".strip()
                 if afm and afm != 'nan': owner_afms.add(f"{afm} - {name}")
 
-    tab_new, tab_list, tab_edit = st.tabs(["➕ Νέο Έξοδο", "📋 Ιστορικό Εξόδων", "✏️ Επεξεργασία"])
+    # ΑΛΛΑΓΗ ΣΕΙΡΑΣ ΕΔΩ: Πρώτα το Ιστορικό, μετά το Νέο Έξοδο
+    tab_list, tab_new, tab_edit = st.tabs(["📋 Ιστορικό Εξόδων", "➕ Νέο Έξοδο", "✏️ Επεξεργασία"])
 
     # --- 1. ΝΕΟ ΕΞΟΔΟ ---
     with tab_new:
