@@ -18,8 +18,8 @@ def show():
         st.error(f"Σφάλμα κατά τη φόρτωση δεδομένων: {e}")
         return
 
-    tab_prop_list, tab_tenant_list, tab_prop_new, tab_prop_edit, tab_tenant_new, tab_tenant_edit = st.tabs([
-        "🏢 Ακίνητα", "👥 Ενοικιαστές", "➕ Νέο Ακίνητο", "✏️ Επεξ. Ακιν.", "➕ Νέος Ενοικ.", "✏️ Επεξ. Ενοικ."
+    tab_prop_list, tab_tenant_list, tab_prop_new, tab_tenant_new, tab_prop_edit, tab_tenant_edit = st.tabs([
+        "🏢 Ακίνητα", "👥 Ενοικιαστές", "➕ Νέο Ακίνητο", "➕ Νέος Ενοικ.", "✏️ Επεξ. Ακιν.", "✏️ Επεξ. Ενοικ."
     ])
 
     with tab_prop_list:
