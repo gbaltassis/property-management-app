@@ -3,22 +3,36 @@ import gsheets_service
 import pandas as pd
 import uuid
 
-# --- CSS για αναγκαστικό Wrap Text στους πίνακες (χωρίς μπάρα κύλισης) ---
-st.markdown("""
+COMMON_CSS = """
 <style>
-    table {
+    .custom-table {
         width: 100% !important;
-        table-layout: fixed;
+        border-collapse: collapse;
+        font-family: sans-serif;
+        font-size: 14px;
+        margin-bottom: 2rem;
     }
-    th, td {
-        word-wrap: break-word;
+    .custom-table th {
+        text-align: left !important;
+        background-color: #f0f2f6;
+        padding: 12px;
+        border-bottom: 1px solid #e6e9ef;
+        color: #31333F;
+    }
+    .custom-table td {
+        text-align: left !important;
+        word-wrap: break-word !important;
         white-space: normal !important;
-        text-align: left;
+        padding: 12px;
+        border-bottom: 1px solid #e6e9ef;
+        color: #31333F;
+        vertical-align: top;
     }
 </style>
-""", unsafe_allow_html=True)
+"""
 
 def show():
+    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Μητρώο")
     st.caption("Διαχείριση και επισκόπηση του χαρτοφυλακίου ακινήτων και του πελατολογίου.")
 
@@ -30,12 +44,10 @@ def show():
         st.error(f"Σφάλμα κατά τη φόρτωση δεδομένων: {e}")
         return
 
-    # Προσθέσαμε καρτέλα Επεξεργασίας Ακινήτου
     tab_prop_list, tab_tenant_list, tab_prop_new, tab_prop_edit, tab_tenant_new = st.tabs([
         "🏢 Ακίνητα", "👥 Ενοικιαστές", "➕ Νέο Ακίνητο", "✏️ Επεξεργασία Ακιν.", "➕ Νέος Ενοικ."
     ])
 
-    # --- ΚΑΡΤΕΛΑ 1: ΛΙΣΤΑ ΑΚΙΝΗΤΩΝ (WRAP TEXT) ---
     with tab_prop_list:
         st.subheader("Καταχωρημένα Ακίνητα")
         if properties_df.empty:
@@ -51,7 +63,8 @@ def show():
                     p_val = str(prop.get(f'Perc_{i}', '')).replace(',', '.')
                     p = pd.to_numeric(p_val, errors='coerce')
                     if pd.isna(p): p = 0.0
-                    if n and n != 'nan' and p > 0:
+                    
+                    if n and p > 0:
                         p_display = str(p).replace('.', ',')
                         if p_display.endswith(',0'): p_display = p_display[:-2]
                         owners_list.append(f"{n} {s} ({r} {p_display}%)")
@@ -64,11 +77,8 @@ def show():
                     "Περιοχή": prop.get("Περιοχή/Δήμος", ""),
                     "Ιδιοκτησιακό Καθεστώς": owners_info
                 })
-            # Χρήση HTML/CSS αντί για st.dataframe για να επιβάλουμε το wrap text
-            html_table = pd.DataFrame(prop_data).to_html(escape=False, index=False, classes='stTable')
-            st.write(html_table, unsafe_allow_html=True)
+            st.write(pd.DataFrame(prop_data).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
 
-    # --- ΚΑΡΤΕΛΑ 2: ΛΙΣΤΑ ΕΝΟΙΚΙΑΣΤΩΝ (WRAP TEXT) ---
     with tab_tenant_list:
         st.subheader("Μητρώο Ενοικιαστών")
         if tenants_df.empty:
@@ -77,7 +87,7 @@ def show():
             tenant_data = []
             for _, tenant in tenants_df.iterrows():
                 t_id = str(tenant.get("Tenant_ID", ""))
-                if t_id and t_id != 'nan':
+                if t_id:
                     linked_prop_charact = "-"
                     if not leases_df.empty and not properties_df.empty:
                         leases_df['Tenant_ID'] = leases_df['Tenant_ID'].astype(str)
@@ -89,19 +99,16 @@ def show():
                                 linked_prop_charact = p_match.iloc[0].get("Χαρακτηριστικό", "-")
 
                     tenant_data.append({
-                        "Ονοματεπώνυμο": f"{str(tenant.get('Επώνυμο', '')).replace('nan', '')} {str(tenant.get('Όνομα', '')).replace('nan', '')}",
-                        "ΑΦΜ": str(tenant.get("ΑΦΜ", "")).replace('nan', ''),
-                        "Επικοινωνία": f"{str(tenant.get('Κινητό', '')).replace('nan', '')}<br>{str(tenant.get('Email', '')).replace('nan', '')}",
+                        "Ονοματεπώνυμο": f"{str(tenant.get('Επώνυμο', ''))} {str(tenant.get('Όνομα', ''))}",
+                        "ΑΦΜ": str(tenant.get("ΑΦΜ", "")),
+                        "Επικοινωνία": f"{str(tenant.get('Κινητό', ''))}<br>{str(tenant.get('Email', ''))}",
                         "Ακίνητο": linked_prop_charact
                     })
             if tenant_data:
-                html_table_ten = pd.DataFrame(tenant_data).to_html(escape=False, index=False, classes='stTable')
-                st.write(html_table_ten, unsafe_allow_html=True)
+                st.write(pd.DataFrame(tenant_data).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
 
-    # --- ΚΑΡΤΕΛΑ 3: ΦΟΡΜΑ ΝΕΟΥ ΑΚΙΝΗΤΟΥ ---
     with tab_prop_new:
         with st.form("new_property_form", clear_on_submit=True):
-            # [Ο υπάρχων κώδικας για το Νέο Ακίνητο παραμένει ακριβώς ο ίδιος]
             charact = st.text_input("Χαρακτηριστικό Ακινήτου *")
             atak = st.text_input("ΑΤΑΚ *")
             nomos = st.text_input("Νομός", value="Αττικής") 
@@ -139,58 +146,52 @@ def show():
                     except Exception as e:
                         st.error(f"Σφάλμα: {e}")
                 else:
-                    st.warning("Συμπληρώστε τα υποχρεωτικά πεδία (έγκυρη επιφάνεια) και τον 1ο Ιδιοκτήτη.")
+                    st.warning("Συμπληρώστε τα υποχρεωτικά πεδία και τον 1ο Ιδιοκτήτη.")
 
-    # --- ΚΑΡΤΕΛΑ 4: ΕΠΕΞΕΡΓΑΣΙΑ / ΔΙΑΓΡΑΦΗ ΑΚΙΝΗΤΟΥ (ΝΕΑ) ---
     with tab_prop_edit:
         st.subheader("Επεξεργασία Υπάρχοντος Ακινήτου")
         if properties_df.empty:
             st.warning("Δεν υπάρχουν ακίνητα.")
         else:
-            # Dropdown για επιλογή ακινήτου
             edit_options = {row["Property_ID"]: f"{row.get('Χαρακτηριστικό', '')} ({row.get('Διεύθυνση', '')})" for _, row in properties_df.iterrows()}
             selected_edit_id = st.selectbox("Επιλέξτε Ακίνητο", options=list(edit_options.keys()), format_func=lambda x: edit_options[x])
             
             if selected_edit_id:
-                # Φόρτωση των υπαρχόντων δεδομένων για το συγκεκριμένο ακίνητο
                 sel_prop = properties_df[properties_df["Property_ID"] == selected_edit_id].iloc[0]
                 
                 with st.form("edit_property_form"):
-                    e_charact = st.text_input("Χαρακτηριστικό Ακινήτου", value=str(sel_prop.get("Χαρακτηριστικό", "")).replace('nan', ''))
-                    e_atak = st.text_input("ΑΤΑΚ", value=str(sel_prop.get("ΑΤΑΚ", "")).replace('nan', ''))
-                    e_nomos = st.text_input("Νομός", value=str(sel_prop.get("Νομός", "")).replace('nan', ''))
-                    e_dimos = st.text_input("Περιοχή / Δήμος", value=str(sel_prop.get("Περιοχή/Δήμος", "")).replace('nan', ''))
+                    e_charact = st.text_input("Χαρακτηριστικό Ακινήτου", value=str(sel_prop.get("Χαρακτηριστικό", "")))
+                    e_atak = st.text_input("ΑΤΑΚ", value=str(sel_prop.get("ΑΤΑΚ", "")))
+                    e_nomos = st.text_input("Νομός", value=str(sel_prop.get("Νομός", "")))
+                    e_dimos = st.text_input("Περιοχή / Δήμος", value=str(sel_prop.get("Περιοχή/Δήμος", "")))
                     
                     ec1, ec2 = st.columns(2)
-                    with ec1: e_address = st.text_input("Οδός", value=str(sel_prop.get("Διεύθυνση", "")).replace('nan', ''))
-                    with ec2: e_number = st.text_input("Αριθμός", value=str(sel_prop.get("Αριθμός", "")).replace('nan', ''))
+                    with ec1: e_address = st.text_input("Οδός", value=str(sel_prop.get("Διεύθυνση", "")))
+                    with ec2: e_number = st.text_input("Αριθμός", value=str(sel_prop.get("Αριθμός", "")))
                     
                     ec3, ec4 = st.columns(2)
-                    with ec3: e_floor = st.text_input("Όροφος", value=str(sel_prop.get("Όροφος", "")).replace('nan', ''))
-                    with ec4: e_sqm = st.text_input("Επιφάνεια (m2)", value=str(sel_prop.get("Επιφάνεια m2", "")).replace('nan', ''))
+                    with ec3: e_floor = st.text_input("Όροφος", value=str(sel_prop.get("Όροφος", "")))
+                    with ec4: e_sqm = st.text_input("Επιφάνεια (m2)", value=str(sel_prop.get("Επιφάνεια m2", "")))
                     
                     st.subheader("Ιδιοκτήτες")
                     e_owner_data = []
                     for i in range(1, 4):
                         with st.expander(f"Ιδιοκτήτης {i}", expanded=(i==1)):
                             rc1, rc2 = st.columns(2)
-                            n = rc1.text_input(f"Όνομα", key=f"en{i}", value=str(sel_prop.get(f"Name_{i}", "")).replace('nan', ''))
-                            s = rc2.text_input(f"Επώνυμο", key=f"es{i}", value=str(sel_prop.get(f"Surname_{i}", "")).replace('nan', ''))
+                            n = rc1.text_input(f"Όνομα", key=f"en{i}", value=str(sel_prop.get(f"Name_{i}", "")))
+                            s = rc2.text_input(f"Επώνυμο", key=f"es{i}", value=str(sel_prop.get(f"Surname_{i}", "")))
                             rc3, rc4, rc5 = st.columns(3)
-                            # Αν το ΑΦΜ είναι αριθμός στο Excel, συχνά λείπει το 0
-                            afm_val = str(sel_prop.get(f"AFM_{i}", "")).replace('nan', '')
+                            
+                            afm_val = str(sel_prop.get(f"AFM_{i}", ""))
                             if len(afm_val) == 8: afm_val = "0" + afm_val
                             afm = rc3.text_input(f"ΑΦΜ", key=f"eafm{i}", value=afm_val)
                             
                             right_options = ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"]
-                            curr_right = str(sel_prop.get(f"Right_{i}", "")).replace('nan', '')
-                            try:
-                                r_idx = right_options.index(curr_right)
-                            except:
-                                r_idx = 0
+                            curr_right = str(sel_prop.get(f"Right_{i}", ""))
+                            r_idx = right_options.index(curr_right) if curr_right in right_options else 0
                             right = rc4.selectbox(f"Είδος", right_options, index=r_idx, key=f"er{i}")
                             
-                            p_val = str(sel_prop.get(f"Perc_{i}", "")).replace('nan', '').replace('.', ',')
+                            p_val = str(sel_prop.get(f"Perc_{i}", "")).replace('.', ',')
                             if p_val == "": p_val = "0"
                             perc = rc5.text_input(f"Ποσοστό %", value=p_val, key=f"ep{i}")
                             
@@ -198,7 +199,6 @@ def show():
                             
                     update_btn = st.form_submit_button("Αποθήκευση Αλλαγών", type="primary")
                     
-                # Ανεξάρτητο κουμπί διαγραφής (έξω από τη φόρμα για ασφάλεια)
                 if st.button("🗑️ Οριστική Διαγραφή Ακινήτου"):
                     try:
                         gsheets_service.delete_property(selected_edit_id)
@@ -214,10 +214,8 @@ def show():
                     except Exception as e:
                         st.error(f"Σφάλμα επεξεργασίας: {e}")
 
-    # --- ΚΑΡΤΕΛΑ 5: ΦΟΡΜΑ ΝΕΟΥ ΕΝΟΙΚΙΑΣΤΗ ---
     with tab_tenant_new:
         with st.form("new_tenant_form", clear_on_submit=True):
-            # [Ο κώδικας του ενοικιαστή παραμένει ίδιος]
             fname = st.text_input("Όνομα *")
             lname = st.text_input("Επώνυμο *")
             afm = st.text_input("ΑΦΜ *")
