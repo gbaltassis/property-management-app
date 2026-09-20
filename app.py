@@ -14,6 +14,9 @@ import ui_leases
 import ui_payments
 import ui_registry
 
+# ΠΡΟΣΘΗΚΗ ΓΙΑ DESKTOP LAYOUT (Πρέπει να είναι η πρώτη εντολή Streamlit)
+st.set_page_config(page_title="Διαχείριση Ακινήτων", layout="wide")
+
 # Τίτλος της εφαρμογής
 st.title("Διαχείριση Ακινήτων")
 
