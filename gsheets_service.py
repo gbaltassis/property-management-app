@@ -68,16 +68,25 @@ def add_payment(payment_data):
     fetch_all_payments.clear()
 
 # --- Συναρτήσεις Επεξεργασίας & Διαγραφής ---
-# ΑΛΛΑΓΗ: Χρήση γενικού Exception αντί για gspread.exceptions.CellNotFound
 def update_row_by_id(sheet_name, row_id, new_data_row, cache_func):
     ws = get_worksheet(sheet_name)
     try:
         cell = ws.find(row_id, in_column=1)
-        for idx, val in enumerate(new_data_row):
-            ws.update_cell(cell.row, idx + 1, val)
+        
+        # --- ΝΕΟΣ ΤΡΟΠΟΣ: BATCH UPDATE ΜΕ 1 API CALL ---
+        # 1. Βρίσκουμε το εύρος των κελιών της συγκεκριμένης γραμμής
+        cell_list = ws.range(cell.row, 1, cell.row, len(new_data_row))
+        
+        # 2. Ενημερώνουμε τις τιμές τοπικά στη μνήμη
+        for i, val in enumerate(new_data_row):
+            cell_list[i].value = str(val)
+            
+        # 3. Τα στέλνουμε ΟΛΑ ΜΑΖΙ στη Google με μία κίνηση!
+        ws.update_cells(cell_list)
+        
         cache_func.clear()
     except Exception as e:
-        raise Exception(f"Δεν βρέθηκε εγγραφή με ID: {row_id} στο {sheet_name}. Λεπτομέρειες: {e}")
+        raise Exception(f"Λεπτομέρειες: {e}")
 
 def delete_row_by_id(sheet_name, row_id, cache_func):
     ws = get_worksheet(sheet_name)
@@ -86,7 +95,7 @@ def delete_row_by_id(sheet_name, row_id, cache_func):
         ws.delete_rows(cell.row)
         cache_func.clear()
     except Exception as e:
-        raise Exception(f"Η εγγραφή {row_id} δεν βρέθηκε για διαγραφή. Λεπτομέρειες: {e}")
+        raise Exception(f"Λεπτομέρειες: {e}")
 
 def update_property(p_id, row): update_row_by_id("Properties", p_id, row, fetch_all_properties)
 def delete_property(p_id): delete_row_by_id("Properties", p_id, fetch_all_properties)
