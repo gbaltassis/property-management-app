@@ -15,7 +15,7 @@ def show():
         st.error("Σφάλμα σύνδεσης.")
         return
 
-    tab_new, tab_list, tab_edit = st.tabs(["➕ Νέα Μίσθωση", "📋 Υπάρχουσες Μισθώσεις", "✏️ Επεξεργασία Μίσθ."])
+    tab_new, tab_list, tab_edit = st.tabs([ "📋 Υπάρχουσες Μισθώσεις", "➕ Νέα Μίσθωση", "✏️ Επεξεργασία Μίσθ."])
 
     with tab_new:
         if properties_df.empty or tenants_df.empty: st.warning("Πρέπει να καταχωρήσετε Ακίνητο και Ενοικιαστή στο Μητρώο.")
