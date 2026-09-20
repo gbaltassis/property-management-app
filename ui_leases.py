@@ -24,7 +24,9 @@ def show():
     with st.form("new_lease_form", clear_on_submit=True):
         st.subheader("1. Αντιστοίχιση")
         selected_prop_id = st.selectbox("Ακίνητο *", options=list(prop_options.keys()), format_func=lambda x: prop_options[x])
-        selected_tenant_id = st.selectbox("Ενοικιαστής *", options=list(tenant_options.keys()), format_func=lambda x: tenant_options[x])
+        
+        # ΑΛΛΑΓΗ: Χρήση multiselect για 1 ή περισσότερους ενοικιαστές
+        selected_tenant_ids = st.multiselect("Ενοικιαστής / Ενοικιαστές *", options=list(tenant_options.keys()), format_func=lambda x: tenant_options[x])
         
         st.subheader("2. Οικονομικοί Όροι")
         col1, col2 = st.columns(2)
@@ -40,10 +42,14 @@ def show():
         submit_lease = st.form_submit_button("Αποθήκευση Μίσθωσης", use_container_width=True)
         
         if submit_lease:
-            if monthly_rent > 0 and end_date > start_date:
+            if monthly_rent > 0 and end_date > start_date and selected_tenant_ids:
                 lease_id = f"LS-{uuid.uuid4().hex[:6].upper()}"
+                
+                # Ενώνουμε τα ID των ενοικιαστών με κόμμα (π.χ. "TN-123, TN-456")
+                tenant_ids_str = ",".join(selected_tenant_ids)
+                
                 row_data = [
-                    lease_id, selected_prop_id, selected_tenant_id, 
+                    lease_id, selected_prop_id, tenant_ids_str, 
                     start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), 
                     monthly_rent, special_agreements, aade_url
                 ]
@@ -53,4 +59,4 @@ def show():
                 except Exception as e:
                     st.error(f"Σφάλμα: {e}")
             else:
-                st.warning("Ελέγξτε τις ημερομηνίες και το ποσό.")
+                st.warning("Ελέγξτε τις ημερομηνίες, το ποσό και επιλέξτε τουλάχιστον έναν ενοικιαστή.")
