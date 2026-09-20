@@ -4,7 +4,16 @@ import uuid
 import pandas as pd
 from datetime import date, datetime
 
+COMMON_CSS = """
+<style>
+    .custom-table { width: 100% !important; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 2rem; }
+    .custom-table th { text-align: left !important; background-color: #f0f2f6; padding: 12px; border-bottom: 1px solid #e6e9ef; color: #31333F; }
+    .custom-table td { text-align: left !important; word-wrap: break-word !important; white-space: normal !important; padding: 12px; border-bottom: 1px solid #e6e9ef; color: #31333F; vertical-align: top; }
+</style>
+"""
+
 def show():
+    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Καταγραφή Οφειλών & Εισπράξεων")
     
     try:
@@ -66,7 +75,7 @@ def show():
     tab_matrix, tab_list = st.tabs(["📊 Πίνακας Ελέγχου", "📋 Ιστορικό Όλων των Εισπράξεων"])
 
     # =========================================================================
-    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ) ---
+    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ ΜΕ ΠΟΛΛΑΠΛΑ ΚΟΥΤΙΑ) ---
     # =========================================================================
     with tab_matrix:
         current_year = datetime.today().year
@@ -94,34 +103,43 @@ def show():
             row_cols[0].write(f"🏠 {prop_charact}\n👤 {tenant_name}")
 
             for m_idx in range(1, 13):
-                p_month = payments_df[(payments_df['Lease_ID'] == l_id) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
-                
-                has_pending = False
-                has_rent_recorded = False
-                rent_paid_amt = 0.0
-                
-                if not p_month.empty:
-                    if not p_month[p_month['Status'] == 'Εκκρεμεί'].empty: has_pending = True
-                    rent_records = p_month[p_month['Payment_Type'] == 'Ενοίκιο']
-                    if not rent_records.empty:
-                        has_rent_recorded = True
-                        rent_paid_amt = pd.to_numeric(rent_records[rent_records['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
-
-                if p_month.empty: status_icon = "❌ Κενό"
-                elif has_pending: status_icon = "⚠️ Εκκρεμεί"
-                elif has_rent_recorded and rent_paid_amt < expected_rent: status_icon = f"⚠️ {rent_paid_amt:.0f}€"
-                elif not has_rent_recorded: status_icon = "⚠️ Μόνο Λογαρ."
-                else: status_icon = "✅ Εξοφλήθη"
+                with row_cols[m_idx]:
+                    p_month = payments_df[(payments_df['Lease_ID'] == l_id) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
                     
-                if row_cols[m_idx].button(status_icon, key=f"btn_{l_id}_{m_idx}_{selected_year}", use_container_width=True):
-                    st.session_state.payment_modal = {
-                        "lease_id": l_id, "month": m_idx, "year": selected_year,
-                        "prop_charact": prop_charact, "tenant_name": tenant_name,
-                        "expected_rent": expected_rent
-                    }
-                    st.session_state.action_pay_id = None
-                    st.session_state.action_edit_id = None
-                    st.rerun()
+                    if p_month.empty:
+                        # Μήνας Κενός -> Εμφάνιση ενός κουμπιού
+                        if st.button("❌ Κενό", key=f"btn_{l_id}_{m_idx}_{selected_year}_empty", use_container_width=True):
+                            st.session_state.payment_modal = {"lease_id": l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
+                            st.session_state.action_pay_id = None
+                            st.session_state.action_edit_id = None
+                            st.rerun()
+                    else:
+                        # Μήνας με δεδομένα -> Στοίβαξη κουμπιών για κάθε ξεχωριστό "Είδος"
+                        for p_type in p_month['Payment_Type'].unique():
+                            type_data = p_month[p_month['Payment_Type'] == p_type]
+                            is_pending = not type_data[type_data['Status'] == 'Εκκρεμεί'].empty
+                            
+                            if p_type == 'Ενοίκιο':
+                                rent_paid_amt = pd.to_numeric(type_data[type_data['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
+                                if is_pending:
+                                    btn_text = f"Ενοίκιο\n⚠️ Εκκρεμεί"
+                                elif rent_paid_amt < expected_rent:
+                                    btn_text = f"Ενοίκιο\n⚠️ {rent_paid_amt:.0f}€"
+                                else:
+                                    btn_text = f"Ενοίκιο\n✅ Εξοφλ."
+                            else:
+                                # Για άλλους λογαριασμούς (Νερό, Ρεύμα)
+                                short_type = p_type[:6] + "." if len(p_type) > 8 else p_type
+                                if is_pending:
+                                    btn_text = f"{short_type}\n⚠️ Εκκρεμεί"
+                                else:
+                                    btn_text = f"{short_type}\n✅ Εξοφλ."
+                                    
+                            if st.button(btn_text, key=f"btn_{l_id}_{m_idx}_{selected_year}_{p_type}", use_container_width=True):
+                                st.session_state.payment_modal = {"lease_id": l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
+                                st.session_state.action_pay_id = None
+                                st.session_state.action_edit_id = None
+                                st.rerun()
 
         # ==========================================
         # --- ΠΑΡΑΘΥΡΟ ΔΙΑΧΕΙΡΙΣΗΣ ΜΗΝΑ (MODAL) ---
@@ -162,7 +180,7 @@ def show():
                             pay_date = pay_c1.date_input("Ημ/νία Εξόφλησης", value=date.today(), key=f"d_pay_{pid}")
                             pay_bank = pay_c2.selectbox("Τράπεζα / Τρόπος", ["Εθνική Τράπεζα", "Eurobank", "Alpha Bank", "Τράπεζα Πειραιώς", "Μετρητά", "Άλλο"], key=f"b_pay_{pid}")
                             
-                            st.write("") # Κενό για ευθυγράμμιση
+                            st.write("") 
                             if pay_c3.button("💾 Αποθήκευση", key=f"s_pay_{pid}", type="primary", use_container_width=True):
                                 try:
                                     new_row = [pid, p_row['Lease_ID'], p_row['Payment_Type'], p_row['Amount'], pay_date.strftime("%Y-%m-%d"), pay_bank, p_row['For_Month'], p_row['For_Year'], "Εξοφλήθηκε"]
@@ -220,7 +238,6 @@ def show():
                                 pc2.write(f"Ημ/νία Πληρωμής: {p_row['Date_Received']}")
                                 pc3.write(f"🏦 {p_row['Bank_Account']}")
                             
-                            # Κουμπιά Ενεργειών
                             bc1, bc2, bc3 = pc4.columns(3)
                             if is_pending:
                                 if bc1.button("💳 Εξόφληση", key=f"btn_p_{pid}", help="Πληρωμή τώρα"):
@@ -241,7 +258,6 @@ def show():
                 fc1, fc2, fc3 = st.columns([2, 2, 2])
                 with fc1: p_type = st.selectbox("Είδος *", ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"])
                 with fc2: 
-                    # Υπολογισμός υπολοίπου ενοικίου για ευκολία
                     rent_paid = pd.to_numeric(p_month_data[p_month_data['Payment_Type'] == 'Ενοίκιο']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum() if not p_month_data.empty else 0.0
                     default_amt = str(max(0, m_info['expected_rent'] - rent_paid)).replace('.', ',') if rent_paid < m_info['expected_rent'] else "0"
                     p_amt = st.text_input("Ποσό (€) *", value=default_amt if p_type == "Ενοίκιο" else "0")
