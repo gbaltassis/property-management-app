@@ -134,7 +134,10 @@ def show():
                     st.session_state.payment_modal = None
                     st.rerun()
 
-            if str(m_info['month']) in m_info['extra_months']:
+            # ΑΣΦΑΛΗΣ ΑΝΑΓΝΩΣΗ (για αποφυγή του KeyError αν υπάρχει παλιό session state)
+            extra_months_list = m_info.get('extra_months', [])
+
+            if str(m_info['month']) in extra_months_list:
                 st.warning("🔔 Υπενθύμιση: Αυτός ο μήνας περιλαμβάνει και πάγια έξοδα (π.χ. Νερό, Κοινόχρηστα) βάσει του Μητρώου!")
 
             p_month_data = payments_df[(payments_df['Lease_ID'] == m_info['lease_id']) & (payments_df['Calc_Month'] == str(m_info['month'])) & (payments_df['Calc_Year'] == str(m_info['year']))]
@@ -161,12 +164,10 @@ def show():
                         except Exception as e: st.error(f"Σφάλμα: {e}")
 
             st.markdown("#### ➕ Προσθήκη Νέας Είσπραξης")
-            # Δεν βάζουμε clear_on_submit=True στη φόρμα για να μένει ανοιχτό το παράθυρο και να περνάς πολλαπλά!
             with st.form("add_monthly_payment_form"):
                 fc1, fc2 = st.columns(2)
                 with fc1: p_type = st.selectbox("Είδος Οφειλής *", ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"])
                 with fc2: 
-                    # Αν δεν έχει πληρωθεί το ενοίκιο, προτείνει το υπόλοιπο. Αλλιώς 0 (ώστε να βάλεις μόνος σου το Νερό).
                     default_amt = str(max(0, m_info['expected_rent'] - rent_paid)).replace('.', ',') if rent_paid < m_info['expected_rent'] else "0"
                     p_amt = st.text_input("Ποσό (€) *", value=default_amt)
                     
