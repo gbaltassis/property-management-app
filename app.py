@@ -5,15 +5,12 @@ import ui_leases
 import ui_payments
 import ui_registry
 
-# ΠΡΟΣΘΗΚΗ ΓΙΑ DESKTOP LAYOUT (Πρέπει να είναι η πρώτη εντολή Streamlit)
-st.set_page_config(page_title="Διαχείριση Ακινήτων", layout="wide")
-
-# Ρύθμιση της σελίδας - ΠΡΕΠΕΙ να είναι η πρώτη εντολή Streamlit στο αρχείο
+# Ρύθμιση της σελίδας - ΜΙΑ ΚΑΙ ΜΟΝΑΔΙΚΗ ΦΟΡΑ
 st.set_page_config(
-    page_title="Property Manager", 
+    page_title="Διαχείριση Ακινήτων", 
     page_icon="🏢", 
-    layout="centered",
-    initial_sidebar_state="collapsed" # Κρύβουμε το sidebar για καλύτερη εμπειρία σε κινητό
+    layout="wide",  # <--- Αυτό κάνει την εφαρμογή να απλώνεται σε όλη την οθόνη (Desktop)
+    initial_sidebar_state="collapsed"
 )
 
 # Τίτλος της εφαρμογής
@@ -27,7 +24,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "⚙️ Μητρώο"
 ])
 
-# Περιεχόμενο κάθε καρτέλας - Εδώ καλούμε τις συναρτήσεις από τα άλλα αρχεία
+# Περιεχόμενο κάθε καρτέλας
 with tab1:
     ui_dashboard.show()
 
