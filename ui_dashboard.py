@@ -24,23 +24,27 @@ def show():
     table_data = []
     
     for _, lease in leases_df.iterrows():
-        # Εύρεση Χαρακτηριστικού Ακινήτου
         prop_match = properties_df[properties_df['Property_ID'] == lease['Property_ID']]
-        charact = str(prop_match.iloc[0].get('Χαρακτηριστικό', '-')) if not prop_match.empty else '-'
         
-        # Κατασκευή string ιδιοκτητών (π.χ. Γιώργος (Επικαρπία 100%) | Μαρία (Ψιλή 100%))
-        owners_str = []
-        for i in range(1, 4):
-            n = lease.get(f'Name_{i}', '')
-            s = lease.get(f'Surname_{i}', '')
-            r = lease.get(f'Right_{i}', '')
-            p = lease.get(f'Perc_{i}', 0)
-            if str(n).strip() and float(p) > 0:
-                owners_str.append(f"{n} {s} ({r} {p}%)")
-                
+        if not prop_match.empty:
+            prop = prop_match.iloc[0]
+            charact = str(prop.get('Χαρακτηριστικό', '-'))
+            
+            owners_str = []
+            for i in range(1, 4):
+                n = prop.get(f'Name_{i}', '')
+                s = prop.get(f'Surname_{i}', '')
+                r = prop.get(f'Right_{i}', '')
+                p = prop.get(f'Perc_{i}', 0)
+                if pd.notna(n) and str(n).strip() and pd.notna(p) and float(p) > 0:
+                    owners_str.append(f"{n} {s} ({r} {p}%)")
+        else:
+            charact = "-"
+            owners_str = []
+
         table_data.append({
             "Ακίνητο": charact,
-            "Ιδιοκτήτες / Δικαιώματα": " | ".join(owners_str),
+            "Ιδιοκτήτες / Δικαιώματα": " | ".join(owners_str) if owners_str else "-",
             "Έναρξη": lease.get('Start_Date', ''),
             "Λήξη": lease.get('End_Date', ''),
             "Μίσθωμα": f"{float(lease.get('Monthly_Rent', 0)):.2f} €"
@@ -49,7 +53,7 @@ def show():
     st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
     st.divider()
 
-    # --- 2. ΒΑΣΙΚΑ KPI & ΕΙΔΟΠΟΙΗΣΕΙΣ (Υφιστάμενα) ---
+    # --- 2. ΒΑΣΙΚΑ KPI & ΕΙΔΟΠΟΙΗΣΕΙΣ ---
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(label="Σύνολο Ακινήτων", value=len(properties_df))
@@ -86,32 +90,34 @@ def show():
 
     # --- 3. ΦΟΡΟΛΟΓΙΚΗ ΕΚΤΙΜΗΣΗ (ΕΤΗΣΙΑ) ΑΝΑ ΙΔΙΟΚΤΗΤΗ ---
     st.subheader("💡 Εκτίμηση Φόρου & Καθαρών Εσόδων (Ετήσια)")
-    st.caption("Υπολογίζεται με βάση την κλίμακα 15%-35%-45% μόνο για όσους έχουν Επικαρπία ή Πλήρη Κυριότητα.")
     
     income_per_owner = {}
     
     for _, lease in leases_df.iterrows():
         rent = float(lease.get('Monthly_Rent', 0))
-        for i in range(1, 4):
-            afm = str(lease.get(f'AFM_{i}', '')).strip()
-            name = f"{lease.get(f'Name_{i}', '')} {lease.get(f'Surname_{i}', '')}".strip()
-            right = str(lease.get(f'Right_{i}', ''))
-            perc = float(lease.get(f'Perc_{i}', 0) or 0)
-            
-            # Το εισόδημα πηγαίνει μόνο σε Επικαρπία / Πλήρη
-            if afm and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
-                share_of_rent = rent * (perc / 100.0)
-                if afm not in income_per_owner:
-                    income_per_owner[afm] = {"name": name, "monthly": 0}
-                income_per_owner[afm]["monthly"] += share_of_rent
+        prop_match = properties_df[properties_df['Property_ID'] == lease['Property_ID']]
+        
+        if not prop_match.empty:
+            prop = prop_match.iloc[0]
+            for i in range(1, 4):
+                afm = str(prop.get(f'AFM_{i}', '')).strip()
+                name = f"{prop.get(f'Name_{i}', '')} {prop.get(f'Surname_{i}', '')}".strip()
+                right = str(prop.get(f'Right_{i}', ''))
+                perc = float(prop.get(f'Perc_{i}', 0) if pd.notna(prop.get(f'Perc_{i}', 0)) else 0)
+                
+                # Το εισόδημα πάει μόνο σε Επικαρπία / Πλήρη Κυριότητα
+                if afm and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
+                    share_of_rent = rent * (perc / 100.0)
+                    if afm not in income_per_owner:
+                        income_per_owner[afm] = {"name": name, "monthly": 0}
+                    income_per_owner[afm]["monthly"] += share_of_rent
 
     if not income_per_owner:
-        st.info("Δεν βρέθηκαν ιδιοκτήτες με δικαίωμα είσπραξης ενοικίου (Επικαρπία/Πλήρης) στις ενεργές μισθώσεις.")
+        st.info("Δεν βρέθηκαν ιδιοκτήτες με δικαίωμα είσπραξης ενοικίου στις ενεργές μισθώσεις.")
 
     for afm, data in income_per_owner.items():
         annual_inc = data["monthly"] * 12
         
-        # Κλιμακωτός Φόρος Εισοδήματος (Ακίνητα)
         tax = 0
         if annual_inc <= 12000:
             tax = annual_inc * 0.15
