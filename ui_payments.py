@@ -4,7 +4,40 @@ import uuid
 import pandas as pd
 from datetime import date, datetime
 
+COMMON_CSS = """
+<style>
+    /* ΕΞΑΝΑΓΚΑΣΜΟΣ ΟΡΙΖΟΝΤΙΑΣ ΚΥΛΙΣΗΣ ΓΙΑ ΤΟ MATRIX ΣΤΟ ΚΙΝΗΤΟ */
+    [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        padding-bottom: 10px;
+    }
+    /* Ελάχιστο πλάτος για τους μήνες ώστε να μη συμπιέζονται */
+    [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) > [data-testid="column"] {
+        min-width: 120px !important;
+    }
+    /* ΠΑΓΩΜΑ ΤΗΣ ΠΡΩΤΗΣ ΣΤΗΛΗΣ (Ακίνητο & Ενοικιαστής) */
+    [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) > [data-testid="column"]:first-child {
+        min-width: 250px !important;
+        position: sticky;
+        left: 0;
+        background-color: #ffffff;
+        z-index: 10;
+        border-right: 2px solid #f0f2f6;
+        padding-right: 10px;
+    }
+    /* Dark Mode υποστήριξη για την παγωμένη στήλη */
+    @media (prefers-color-scheme: dark) {
+        [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) > [data-testid="column"]:first-child {
+            background-color: #0e1117;
+            border-right: 2px solid #262730;
+        }
+    }
+</style>
+"""
+
 def show():
+    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Καταγραφή Οφειλών & Εισπράξεων")
     
     try:
@@ -49,7 +82,6 @@ def show():
     if "action_edit_id" not in st.session_state: st.session_state.action_edit_id = None
 
     # --- ΕΞΥΠΝΗ ΟΜΑΔΟΠΟΙΗΣΗ ΜΙΣΘΩΣΕΩΝ ---
-    # Ομαδοποιούμε τις μισθώσεις του ίδιου ενοικιαστή στο ίδιο ακίνητο για να υπάρχει συνέχεια
     leases_df['Group_Key'] = leases_df['Property_ID'] + "_" + leases_df['Tenant_ID']
 
     def get_expected_rent_and_lease(group_leases, y, m):
@@ -68,7 +100,6 @@ def show():
                 rent = pd.to_numeric(str(l.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
                 return rent if pd.notna(rent) else 0.0, str(l['Lease_ID'])
                 
-        # Αν δεν βρεθεί ενεργή στον μήνα, επιστρέφει την πιο πρόσφατη
         latest = sorted_leases.iloc[0]
         rent = pd.to_numeric(str(latest.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
         return rent if pd.notna(rent) else 0.0, str(latest['Lease_ID'])
@@ -109,10 +140,7 @@ def show():
 
             for m_idx in range(1, 13):
                 with row_cols[m_idx]:
-                    # Υπολογισμός σωστού ενοικίου για ΑΥΤΟΝ τον μήνα!
                     expected_rent, active_l_id = get_expected_rent_and_lease(group_leases, selected_year, m_idx)
-                    
-                    # Φιλτράρισμα πληρωμών για ΟΛΑ τα Lease IDs αυτής της ομάδας (για αποφυγή λαθών)
                     p_month = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
                     
                     if p_month.empty:
@@ -128,11 +156,11 @@ def show():
                             if p_type == 'Ενοίκιο':
                                 rent_paid_amt = pd.to_numeric(type_data[type_data['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
                                 if is_pending: btn_text = f"\n⚠️Ενοίκιο Εκκρεμεί"
-                                elif rent_paid_amt < expected_rent: btn_text = f"Ενοίκιο\n⚠️ {rent_paid_amt:.0f}€"
+                                elif rent_paid_amt < expected_rent: btn_text = f"\n⚠️Ενοίκιο {rent_paid_amt:.0f}€"
                                 else: btn_text = f"\n✅Ενοίκιο Εξοφλ."
                             else:
                                 short_type = p_type[:6] + "." if len(p_type) > 8 else p_type
-                                btn_text = f"{short_type}\n⚠️ Εκκρεμεί" if is_pending else f"\n✅{short_type} Εξοφλ."
+                                btn_text = f"\n⚠️{short_type} Εκκρεμεί" if is_pending else f"\n✅{short_type} Εξοφλ."
                                     
                             if st.button(btn_text, key=f"btn_{active_l_id}_{m_idx}_{selected_year}_{p_type}", use_container_width=True):
                                 st.session_state.payment_modal = {"lease_id_list": l_id_list, "active_lease_id": active_l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
@@ -267,7 +295,6 @@ def show():
                     if amt_val > 0:
                         try:
                             clean_status = "Εξοφλήθηκε" if is_exof else "Εκκρεμεί"
-                            # Χρησιμοποιούμε το active_lease_id για να "κουμπώσει" σωστά στη χρονική περίοδο
                             gsheets_service.add_payment([f"PAY-{uuid.uuid4().hex[:6].upper()}", m_info['active_lease_id'], p_type, p_amt, p_date.strftime("%Y-%m-%d"), p_bank, str(m_info['month']), str(m_info['year']), clean_status, p_desc])
                             st.success("Καταχωρήθηκε!")
                             st.rerun() 
@@ -288,7 +315,6 @@ def show():
                 d_text = str(row.get("Description", "")).replace('nan','')
                 cat_display = f"{row.get('Payment_Type', '')} ({d_text})" if d_text and row.get('Payment_Type') == 'Άλλο' else row.get("Payment_Type", "")
                 
-                # Αναζήτηση Property_ID από το Lease_ID (για σωστή εμφάνιση στο ιστορικό)
                 l_id = str(row.get("Lease_ID", ""))
                 l_match = leases_df[leases_df["Lease_ID"] == l_id] if not leases_df.empty else pd.DataFrame()
                 p_charact = "-"
@@ -328,7 +354,6 @@ def show():
             if selected_pay_edit:
                 sel_pay = payments_df[payments_df["Payment_ID"] == selected_pay_edit].iloc[0]
                 
-                # Φέρνουμε όλες τις μισθώσεις για το Dropdown
                 l_opts_all = {}
                 for _, r in leases_df.iterrows():
                     l_id = str(r.get("Lease_ID", ""))
