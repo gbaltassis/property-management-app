@@ -6,32 +6,88 @@ from datetime import date, datetime
 
 COMMON_CSS = """
 <style>
-    /* ΕΞΑΝΑΓΚΑΣΜΟΣ ΟΡΙΖΟΝΤΙΑΣ ΚΥΛΙΣΗΣ ΓΙΑ ΤΟ MATRIX ΣΤΟ ΚΙΝΗΤΟ */
-    [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) {
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
-        padding-bottom: 10px;
+    /* CSS ΓΙΑ ΤΟΝ ΕΞΥΠΝΟ HTML ΠΙΝΑΚΑ */
+    .matrix-wrapper {
+        overflow-x: auto;
+        max-width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
-    /* Ελάχιστο πλάτος για τους μήνες ώστε να μη συμπιέζονται */
-    [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) > [data-testid="column"] {
-        min-width: 120px !important;
+    .matrix-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: sans-serif;
+        font-size: 13px;
+        background: white;
+        min-width: 900px; /* Εξαναγκασμός κύλισης στο κινητό */
     }
-    /* ΠΑΓΩΜΑ ΤΗΣ ΠΡΩΤΗΣ ΣΤΗΛΗΣ (Ακίνητο & Ενοικιαστής) */
-    [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) > [data-testid="column"]:first-child {
-        min-width: 250px !important;
+    .matrix-table th {
+        background-color: #f0f2f6;
+        color: #31333F;
+        padding: 12px 8px;
+        border-bottom: 2px solid #ddd;
+        border-right: 1px solid #ddd;
+        text-align: center;
+    }
+    .matrix-table td {
+        border-bottom: 1px solid #ddd;
+        border-right: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+        vertical-align: top;
+    }
+    /* Πάγωμα Πρώτης Στήλης */
+    .matrix-table th:first-child,
+    .matrix-table td:first-child {
         position: sticky;
         left: 0;
         background-color: #ffffff;
-        z-index: 10;
-        border-right: 2px solid #f0f2f6;
-        padding-right: 10px;
+        z-index: 2;
+        border-right: 2px solid #bbb;
+        text-align: left;
+        min-width: 220px;
     }
-    /* Dark Mode υποστήριξη για την παγωμένη στήλη */
+    .matrix-table th:first-child { z-index: 3; }
+    
+    /* Σχεδιασμός Κελιών / Κουμπιών */
+    .matrix-cell-link {
+        display: block;
+        text-decoration: none;
+        color: #31333F;
+        padding: 6px;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        margin-bottom: 4px;
+        font-weight: 500;
+        transition: all 0.2s;
+        white-space: pre-line; /* Επιτρέπει αλλαγή γραμμής */
+    }
+    .matrix-cell-link:hover {
+        background-color: #e2e6ea;
+        border-color: #dae0e5;
+        color: #000;
+    }
+    .matrix-cell-empty {
+        display: block;
+        text-decoration: none;
+        color: #6c757d;
+        padding: 6px;
+    }
+    
+    /* Dark Mode */
     @media (prefers-color-scheme: dark) {
-        [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(13)) > [data-testid="column"]:first-child {
-            background-color: #0e1117;
-            border-right: 2px solid #262730;
-        }
+        .matrix-wrapper { border-color: #444; }
+        .matrix-table { background: #0e1117; color: white; }
+        .matrix-table th { background-color: #262730; color: white; border-color: #444; }
+        .matrix-table td { border-color: #444; color: white; }
+        .matrix-table th:first-child,
+        .matrix-table td:first-child { background-color: #0e1117; border-right-color: #666; }
+        .matrix-cell-link { background-color: #1e2127; border-color: #444; color: #ddd; }
+        .matrix-cell-link:hover { background-color: #2a2e37; color: #fff; }
+        .matrix-cell-empty { color: #888; }
     }
 </style>
 """
@@ -40,6 +96,28 @@ def show():
     st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Καταγραφή Οφειλών & Εισπράξεων")
     
+    # --- 1. ΔΙΑΧΕΙΡΙΣΗ ΚΛΙΚ (URL Query Params) ---
+    try:
+        params = st.query_params
+        if "l_id" in params:
+            st.session_state.payment_modal = {
+                "active_lease_id": params["l_id"],
+                "month": int(params["m"]),
+                "year": int(params["y"])
+            }
+            st.query_params.clear()
+    except AttributeError:
+        # Fallback για παλαιότερες εκδόσεις Streamlit
+        params = st.experimental_get_query_params()
+        if "l_id" in params:
+            st.session_state.payment_modal = {
+                "active_lease_id": params["l_id"][0],
+                "month": int(params["m"][0]),
+                "year": int(params["y"][0])
+            }
+            st.experimental_set_query_params()
+
+    # --- 2. ΦΟΡΤΩΣΗ ΔΕΔΟΜΕΝΩΝ ---
     try:
         leases_df = gsheets_service.fetch_all_leases()
         tenants_df = gsheets_service.fetch_all_tenants()
@@ -53,7 +131,6 @@ def show():
         st.info("Δεν υπάρχουν ενεργές μισθώσεις.")
         return
 
-    # --- ΠΡΟΕΤΟΙΜΑΣΙΑ ΔΕΔΟΜΕΝΩΝ ΠΛΗΡΩΜΩΝ ---
     if not payments_df.empty:
         if "For_Month" not in payments_df.columns: payments_df["For_Month"] = ""
         if "For_Year" not in payments_df.columns: payments_df["For_Year"] = ""
@@ -104,20 +181,24 @@ def show():
         rent = pd.to_numeric(str(latest.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
         return rent if pd.notna(rent) else 0.0, str(latest['Lease_ID'])
 
-    tab_matrix, tab_list, tab_edit = st.tabs(["📊 Πίνακας Ελέγχου", "📋 Ιστορικό Όλων των Εισπράξεων", "✏️ Επεξεργασία"])
+    tab_matrix, tab_list, tab_edit = st.tabs(["📊 Πίνακας Ελέγχου", "📋 Ιστορικό Όλων των Εισπράξεων", "✏️ Επεξεργασία (Γενική)"])
 
     # =========================================================================
-    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ) ---
+    # --- 3. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ ME HTML TABLE) ---
     # =========================================================================
     with tab_matrix:
         current_year = datetime.today().year
         selected_year = st.selectbox("Επιλογή Έτους", [current_year - 1, current_year, current_year + 1, current_year + 2], index=1)
         st.subheader(f"Κατάσταση Μισθωμάτων & Λογαριασμών - {selected_year}")
+        st.caption("Αγγίξτε ένα κελί (μήνα) για να προβάλετε, να εξοφλήσετε ή να προσθέσετε εισπράξεις.")
 
         months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
-        cols = st.columns([3] + [1]*12)
-        cols[0].markdown("**Ακίνητο & Ενοικιαστής**")
-        for i, m_name in enumerate(months): cols[i+1].markdown(f"**{m_name}**")
+        
+        # Κατασκευή του HTML Πίνακα
+        html = '<div class="matrix-wrapper"><table class="matrix-table">'
+        html += '<tr><th>Ακίνητο & Ενοικιαστής</th>'
+        for m in months: html += f'<th>{m}</th>'
+        html += '</tr>'
 
         for g_key, group_leases in leases_df.groupby('Group_Key'):
             l_id_list = group_leases['Lease_ID'].astype(str).tolist()
@@ -135,55 +216,76 @@ def show():
                 if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', '')).replace('nan','')} {str(t_match.iloc[0].get('Όνομα', '')).replace('nan','')}")
             tenant_name = " & ".join(t_names) if t_names else "Άγνωστος"
 
-            row_cols = st.columns([3] + [1]*12)
-            row_cols[0].write(f"🏠 {prop_charact}\n👤 {tenant_name}")
+            html += f'<tr><td>🏠 <strong>{prop_charact}</strong><br>👤 <span style="font-size: 11px; opacity: 0.8;">{tenant_name}</span></td>'
 
             for m_idx in range(1, 13):
-                with row_cols[m_idx]:
-                    expected_rent, active_l_id = get_expected_rent_and_lease(group_leases, selected_year, m_idx)
-                    p_month = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
-                    
-                    if p_month.empty:
-                        if st.button("❌ Κενό", key=f"btn_{active_l_id}_{m_idx}_{selected_year}_empty", use_container_width=True):
-                            st.session_state.payment_modal = {"lease_id_list": l_id_list, "active_lease_id": active_l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
-                            st.session_state.action_pay_id = None; st.session_state.action_edit_id = None
-                            st.rerun()
-                    else:
-                        for p_type in p_month['Payment_Type'].unique():
-                            type_data = p_month[p_month['Payment_Type'] == p_type]
-                            is_pending = not type_data[type_data['Status'] == 'Εκκρεμεί'].empty
-                            
-                            if p_type == 'Ενοίκιο':
-                                rent_paid_amt = pd.to_numeric(type_data[type_data['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
-                                if is_pending: btn_text = f"\n⚠️Ενοίκιο Εκκρεμεί"
-                                elif rent_paid_amt < expected_rent: btn_text = f"\n⚠️Ενοίκιο {rent_paid_amt:.0f}€"
-                                else: btn_text = f"\n✅Ενοίκιο Εξοφλ."
-                            else:
-                                short_type = p_type[:6] + "." if len(p_type) > 8 else p_type
-                                btn_text = f"\n⚠️{short_type} Εκκρεμεί" if is_pending else f"\n✅{short_type} Εξοφλ."
-                                    
-                            if st.button(btn_text, key=f"btn_{active_l_id}_{m_idx}_{selected_year}_{p_type}", use_container_width=True):
-                                st.session_state.payment_modal = {"lease_id_list": l_id_list, "active_lease_id": active_l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
-                                st.session_state.action_pay_id = None; st.session_state.action_edit_id = None
-                                st.rerun()
+                expected_rent, active_l_id = get_expected_rent_and_lease(group_leases, selected_year, m_idx)
+                p_month = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
+                
+                html += '<td>'
+                if p_month.empty:
+                    html += f'<a href="?l_id={active_l_id}&m={m_idx}&y={selected_year}" target="_self" class="matrix-cell-empty">❌ Κενό</a>'
+                else:
+                    for p_type in p_month['Payment_Type'].unique():
+                        type_data = p_month[p_month['Payment_Type'] == p_type]
+                        is_pending = not type_data[type_data['Status'] == 'Εκκρεμεί'].empty
+                        
+                        if p_type == 'Ενοίκιο':
+                            rent_paid_amt = pd.to_numeric(type_data[type_data['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
+                            if is_pending: btn_text = f"Ενοίκιο<br>⚠️ Εκκρεμεί"
+                            elif rent_paid_amt < expected_rent: btn_text = f"Ενοίκιο<br>⚠️ {rent_paid_amt:.0f}€"
+                            else: btn_text = f"Ενοίκιο<br>✅ Εξοφλ."
+                        else:
+                            short_type = p_type[:6] + "." if len(p_type) > 8 else p_type
+                            btn_text = f"{short_type}<br>⚠️ Εκκρεμεί" if is_pending else f"{short_type}<br>✅ Εξοφλ."
+                                
+                        html += f'<a href="?l_id={active_l_id}&m={m_idx}&y={selected_year}" target="_self" class="matrix-cell-link">{btn_text}</a>'
+                html += '</td>'
+            html += '</tr>'
+            
+        html += '</table></div>'
+        st.markdown(html, unsafe_allow_html=True)
 
         # ==========================================
         # --- ΠΑΡΑΘΥΡΟ ΔΙΑΧΕΙΡΙΣΗΣ ΜΗΝΑ (MODAL) ---
         # ==========================================
         if st.session_state.payment_modal:
             m_info = st.session_state.payment_modal
-            st.markdown("---")
+            active_l_id = m_info["active_lease_id"]
+            m_idx = m_info["month"]
+            selected_year = m_info["year"]
             
+            # Υπολογισμός Δεδομένων Modal
+            active_l_row = leases_df[leases_df['Lease_ID'] == active_l_id]
+            if not active_l_row.empty:
+                p_id = str(active_l_row.iloc[0].get('Property_ID', ''))
+                t_id = str(active_l_row.iloc[0].get('Tenant_ID', ''))
+                group_leases = leases_df[leases_df['Group_Key'] == (p_id + "_" + t_id)]
+                l_id_list = group_leases['Lease_ID'].astype(str).tolist()
+                expected_rent, _ = get_expected_rent_and_lease(group_leases, selected_year, m_idx)
+                
+                p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
+                prop_charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '-')) if not p_match.empty else "-"
+                
+                t_names = []
+                for tid_clean in [t.strip() for t in t_id.split(',') if t.strip()]:
+                    t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
+                    if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', '')).replace('nan','')} {str(t_match.iloc[0].get('Όνομα', '')).replace('nan','')}")
+                tenant_name = " & ".join(t_names) if t_names else "Άγνωστος"
+            else:
+                l_id_list = [active_l_id]; expected_rent, prop_charact, tenant_name = 0.0, "-", "-"
+
+            st.markdown("---")
             col_t, col_b = st.columns([4, 1])
             with col_t:
-                st.markdown(f"### ⚙️ Διαχείριση Μήνα: **{months[m_info['month']-1]} {m_info['year']}**")
-                st.caption(f"🏠 {m_info['prop_charact']} | 👤 {m_info['tenant_name']}")
+                st.markdown(f"### ⚙️ Διαχείριση Μήνα: **{months[m_idx-1]} {selected_year}**")
+                st.caption(f"🏠 {prop_charact} | 👤 {tenant_name}")
             with col_b:
                 if st.button("❌ Κλείσιμο", use_container_width=True):
                     st.session_state.payment_modal = None
                     st.rerun()
 
-            p_month_data = payments_df[(payments_df['Lease_ID'].isin(m_info['lease_id_list'])) & (payments_df['Calc_Month'] == str(m_info['month'])) & (payments_df['Calc_Year'] == str(m_info['year']))]
+            p_month_data = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
             
             st.markdown("#### 📋 Καταχωρημένες Οφειλές & Εισπράξεις")
             if p_month_data.empty: 
@@ -225,7 +327,7 @@ def show():
                             e_amt = e_c2.text_input("Ποσό (€)", value=str(p_row['Amount']).replace('.', ','), key=f"ea_{pid}")
                             e_status = e_c3.selectbox("Κατάσταση", ["Εκκρεμεί", "Εξοφλήθηκε"], index=0 if is_pending else 1, key=f"es_{pid}")
                             
-                            e_desc = st.text_input("Περιγραφή *", value=desc_text, key=f"edesc_{pid}") if e_type == "Άλλο" else ""
+                            e_desc = st.text_input("Περιγραφή (προαιρετικό)", value=desc_text, key=f"edesc_{pid}")
                             
                             e_c4, e_c5, e_c6, e_c7 = st.columns([2, 2, 1, 1])
                             try: default_date = datetime.strptime(str(p_row['Date_Received']), "%Y-%m-%d").date()
@@ -269,19 +371,17 @@ def show():
                                 gsheets_service.delete_payment(pid); st.rerun()
 
             # --- ΠΡΟΣΘΗΚΗ ΝΕΑΣ ΟΦΕΙΛΗΣ ---
-            st.markdown("#### ➕ Προσθήκη Νέας Καταχώρησης (για αυτόν τον μήνα)")
-            
-            p_type = st.selectbox("Είδος *", ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"], key="modal_new_type")
-            
+            st.markdown("#### ➕ Προσθήκη Νέας Καταχώρησης")
             with st.form("add_monthly_payment_form"):
-                p_desc = st.text_input("Περιγραφή *", placeholder="π.χ. Υδραυλικός, Διαρροή") if p_type == "Άλλο" else ""
-                
-                fc1, fc2 = st.columns(2)
-                with fc1: 
+                fc1, fc2, fc3 = st.columns([2, 2, 2])
+                with fc1: p_type = st.selectbox("Είδος *", ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"])
+                with fc2: 
                     rent_paid = pd.to_numeric(p_month_data[p_month_data['Payment_Type'] == 'Ενοίκιο']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum() if not p_month_data.empty else 0.0
-                    default_amt = str(max(0, m_info['expected_rent'] - rent_paid)).replace('.', ',') if rent_paid < m_info['expected_rent'] else "0"
-                    p_amt = st.text_input("Ποσό (€) *", value=default_amt if p_type == "Ενοίκιο" else "0")
-                with fc2: p_status = st.radio("Κατάσταση *", ["Εκκρεμεί (Ήρθε λογαριασμός / Χρωστάει)", "Εξοφλήθηκε (Πληρώθηκε)"], index=1)
+                    default_amt = str(max(0, expected_rent - rent_paid)).replace('.', ',') if rent_paid < expected_rent else "0"
+                    p_amt = st.text_input("Ποσό (€) *", value=default_amt)
+                with fc3: p_status = st.radio("Κατάσταση *", ["Εκκρεμεί (Ήρθε λογαριασμός / Χρωστάει)", "Εξοφλήθηκε (Πληρώθηκε)"], index=1)
+                
+                p_desc = st.text_input("Περιγραφή (προαιρετικό)", placeholder="π.χ. Υδραυλικός, Διαρροή")
                 
                 hc1, hc2 = st.columns(2)
                 with hc1: p_date = st.date_input("Ημερομηνία (Έκδοσης ή Πληρωμής) *", value=date.today())
@@ -295,45 +395,45 @@ def show():
                     if amt_val > 0:
                         try:
                             clean_status = "Εξοφλήθηκε" if is_exof else "Εκκρεμεί"
-                            gsheets_service.add_payment([f"PAY-{uuid.uuid4().hex[:6].upper()}", m_info['active_lease_id'], p_type, p_amt, p_date.strftime("%Y-%m-%d"), p_bank, str(m_info['month']), str(m_info['year']), clean_status, p_desc])
+                            gsheets_service.add_payment([f"PAY-{uuid.uuid4().hex[:6].upper()}", active_l_id, p_type, p_amt, p_date.strftime("%Y-%m-%d"), p_bank, str(m_idx), str(selected_year), clean_status, p_desc])
                             st.success("Καταχωρήθηκε!")
                             st.rerun() 
                         except Exception as e: st.error(f"Σφάλμα: {e}")
                     else: st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
 
     # =========================================================================
-    # --- 2. ΙΣΤΟΡΙΚΟ ---
+    # --- 4. ΙΣΤΟΡΙΚΟ ---
     # =========================================================================
     with tab_list:
         if payments_df.empty: st.info("Δεν έχουν καταγραφεί εισπράξεις.")
         else:
             pay_list_data = []
+            
+            # Δημιουργούμε ένα γρήγορο λεξικό μισθώσεων για το Ιστορικό
+            l_opts_all = {}
+            for _, r in leases_df.iterrows():
+                l_id = str(r.get("Lease_ID", ""))
+                p_id = str(r.get("Property_ID", ""))
+                p_charact = "-"
+                p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
+                if not p_match.empty: p_charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '-'))
+                t_names = []
+                for tid_clean in [t.strip() for t in str(r.get("Tenant_ID", "")).split(',') if t.strip()]:
+                    t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
+                    if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}")
+                l_opts_all[l_id] = f"{' & '.join(t_names) if t_names else 'Άγνωστος'} | {p_charact}"
+                
             for _, row in payments_df.iterrows():
                 amt_val = pd.to_numeric(str(row.get('Amount', '0')).replace(',', '.'), errors='coerce')
                 if pd.isna(amt_val): amt_val = 0.0
                 
                 d_text = str(row.get("Description", "")).replace('nan','')
-                cat_display = f"{row.get('Payment_Type', '')} ({d_text})" if d_text and row.get('Payment_Type') == 'Άλλο' else row.get("Payment_Type", "")
-                
-                l_id = str(row.get("Lease_ID", ""))
-                l_match = leases_df[leases_df["Lease_ID"] == l_id] if not leases_df.empty else pd.DataFrame()
-                p_charact = "-"
-                t_name = "-"
-                if not l_match.empty:
-                    p_id = str(l_match.iloc[0].get("Property_ID", ""))
-                    p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
-                    if not p_match.empty: p_charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '-'))
-                    
-                    t_names = []
-                    for tid_clean in [t.strip() for t in str(l_match.iloc[0].get("Tenant_ID", "")).split(',') if t.strip()]:
-                        t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
-                        if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}")
-                    t_name = " & ".join(t_names) if t_names else "Άγνωστος"
+                cat_display = f"{row.get('Payment_Type', '')} ({d_text})" if d_text else row.get("Payment_Type", "")
                 
                 pay_list_data.append({
                     "Ημερομηνία": row.get("Date_Received", ""),
                     "Μήνας / Έτος": f"{row.get('Calc_Month', '-')} / {row.get('Calc_Year', '-')}",
-                    "Μίσθωση / Ενοικιαστής": f"{t_name} | {p_charact}",
+                    "Μίσθωση / Ενοικιαστής": l_opts_all.get(str(row.get("Lease_ID", "")), "Διαγραμμένη Μίσθωση"),
                     "Είδος": cat_display,
                     "Ποσό": f"{amt_val:.2f} €".replace('.', ','),
                     "Κατάσταση": "✅ Εξοφλήθηκε" if str(row.get("Status", "")) == "Εξοφλήθηκε" else "⚠️ Εκκρεμεί",
@@ -343,7 +443,7 @@ def show():
             st.dataframe(pd.DataFrame(pay_list_data), use_container_width=True, hide_index=True)
 
     # =========================================================================
-    # --- 3. ΕΠΕΞΕΡΓΑΣΙΑ (ΓΕΝΙΚΗ) ---
+    # --- 5. ΕΠΕΞΕΡΓΑΣΙΑ (ΓΕΝΙΚΗ) ---
     # =========================================================================
     with tab_edit:
         if payments_df.empty: st.warning("Δεν υπάρχουν πληρωμές.")
@@ -353,20 +453,6 @@ def show():
             
             if selected_pay_edit:
                 sel_pay = payments_df[payments_df["Payment_ID"] == selected_pay_edit].iloc[0]
-                
-                l_opts_all = {}
-                for _, r in leases_df.iterrows():
-                    l_id = str(r.get("Lease_ID", ""))
-                    p_id = str(r.get("Property_ID", ""))
-                    p_charact = "-"
-                    p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
-                    if not p_match.empty: p_charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '-'))
-                    
-                    t_names = []
-                    for tid_clean in [t.strip() for t in str(r.get("Tenant_ID", "")).split(',') if t.strip()]:
-                        t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
-                        if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}")
-                    l_opts_all[l_id] = f"{' & '.join(t_names) if t_names else 'Άγνωστος'} | {p_charact}"
                 
                 l_keys = list(l_opts_all.keys())
                 try: l_idx = l_keys.index(str(sel_pay.get("Lease_ID", "")))
@@ -385,7 +471,7 @@ def show():
                     curr_status = str(sel_pay.get("Status", "Εξοφλήθηκε"))
                     with ec2: e_status = st.selectbox("Κατάσταση", ["Εκκρεμεί", "Εξοφλήθηκε"], index=0 if curr_status == "Εκκρεμεί" else 1)
                     
-                    e_desc_global = st.text_input("Περιγραφή *", value=str(sel_pay.get("Description", "")).replace('nan','')) if e_type_global == "Άλλο" else ""
+                    e_desc_global = st.text_input("Περιγραφή (προαιρετικό)", value=str(sel_pay.get("Description", "")).replace('nan',''))
                     
                     ec4, ec5 = st.columns(2)
                     bank_opts, curr_bank = ["Εθνική Τράπεζα", "Eurobank", "Alpha Bank", "Τράπεζα Πειραιώς", "Μετρητά", "Άλλο"], str(sel_pay.get("Bank_Account", ""))
