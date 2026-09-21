@@ -127,12 +127,12 @@ def show():
                             
                             if p_type == 'Ενοίκιο':
                                 rent_paid_amt = pd.to_numeric(type_data[type_data['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
-                                if is_pending: btn_text = f"Ενοίκιο\n⚠️ Εκκρεμεί"
+                                if is_pending: btn_text = f"\n⚠️Ενοίκιο Εκκρεμεί"
                                 elif rent_paid_amt < expected_rent: btn_text = f"Ενοίκιο\n⚠️ {rent_paid_amt:.0f}€"
-                                else: btn_text = f"Ενοίκιο\n✅ Εξοφλ."
+                                else: btn_text = f"\n✅Ενοίκιο Εξοφλ."
                             else:
                                 short_type = p_type[:6] + "." if len(p_type) > 8 else p_type
-                                btn_text = f"{short_type}\n⚠️ Εκκρεμεί" if is_pending else f"{short_type}\n✅ Εξοφλ."
+                                btn_text = f"{short_type}\n⚠️ Εκκρεμεί" if is_pending else f"\n✅{short_type} Εξοφλ."
                                     
                             if st.button(btn_text, key=f"btn_{active_l_id}_{m_idx}_{selected_year}_{p_type}", use_container_width=True):
                                 st.session_state.payment_modal = {"lease_id_list": l_id_list, "active_lease_id": active_l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
