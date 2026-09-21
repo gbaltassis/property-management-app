@@ -3,75 +3,88 @@ import gsheets_service
 import uuid
 import pandas as pd
 from datetime import date, datetime
+import streamlit.components.v1 as components
 
 COMMON_CSS = """
 <style>
-    /* -------------------------------------------------------------
-       BULLETPROOF MOBILE GRID (Χωρίς χρήση :has για παλιά κινητά)
-       ------------------------------------------------------------- */
+    /* CSS ΓΙΑ ΤΟΝ ΕΝΙΑΙΟ HTML ΠΙΝΑΚΑ */
+    .matrix-wrapper {
+        overflow-x: auto;
+        max-width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .matrix-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: sans-serif;
+        font-size: 13px;
+        background: white;
+        min-width: 900px; /* Εξαναγκασμός κύλισης στο κινητό */
+    }
+    .matrix-table th {
+        background-color: #f0f2f6;
+        color: #31333F;
+        padding: 12px 8px;
+        border-bottom: 2px solid #ddd;
+        border-right: 1px solid #ddd;
+        text-align: center;
+        position: sticky;
+        top: 0;
+        z-index: 4;
+    }
+    .matrix-table td {
+        border-bottom: 1px solid #ddd;
+        border-right: 1px solid #ddd;
+        padding: 6px;
+        text-align: center;
+        vertical-align: top;
+    }
+    /* Πάγωμα Πρώτης Στήλης */
+    .matrix-table th:first-child,
+    .matrix-table td:first-child {
+        position: sticky;
+        left: 0;
+        background-color: #ffffff;
+        z-index: 5;
+        border-right: 2px solid #bbb;
+        text-align: left;
+        min-width: 160px; /* Πιο στενή πρώτη στήλη */
+    }
+    .matrix-table th:first-child { z-index: 6; }
     
-    /* 1. Σμίκρυνση των κουμπιών για να θυμίζουν κελιά πίνακα */
-    [data-testid="stButton"] button {
-        width: 100% !important;
-        padding: 4px 2px !important;
-        min-height: 45px !important;
-        font-size: 13px !important;
-        line-height: 1.2 !important;
-        white-space: pre-line !important; /* Επιτρέπει αλλαγή γραμμής (Enter) */
-        border-radius: 4px !important;
+    /* Σχεδιασμός Κελιών (Αόρατα Κουμπιά JS) */
+    .matrix-cell-btn {
+        display: block;
+        width: 100%;
+        text-align: center;
+        color: #31333F;
+        padding: 6px;
+        border-radius: 4px;
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
+        margin-bottom: 4px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 12px;
     }
-    
-    /* 2. Κρύβουμε τα περιττά κενά του Streamlit γύρω από τις στήλες */
-    [data-testid="column"] {
-        padding: 0px 4px !important;
-        gap: 0px !important;
+    .matrix-cell-btn:hover {
+        background-color: #e2e6ea;
+        border-color: #dae0e5;
+        color: #000;
     }
-    
-    /* -------------------------------------------------------------
-       ΚΑΝΟΝΕΣ ΜΟΝΟ ΓΙΑ ΤΗΝ ΟΘΟΝΗ ΚΙΝΗΤΩΝ ΚΑΙ ΤΑΜΠΛΕΤ (max-width: 900px)
-       ------------------------------------------------------------- */
-    @media (max-width: 900px) {
-        /* Ανιχνεύουμε τα οριζόντια blocks του Streamlit και τους κάνουμε override */
-        [data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important; /* Εξαναγκασμός να μείνουν δίπλα-δίπλα */
-            flex-wrap: nowrap !important;   /* Απαγόρευση αναδίπλωσης προς τα κάτω */
-            overflow-x: auto !important;    /* Ενεργοποίηση μπάρας κύλισης (swipe) */
-            padding-bottom: 10px !important;
-        }
-        
-        /* Ρύθμιση πλάτους για τις στήλες των Μηνών (12 στήλες) */
-        [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+2) {
-            min-width: 85px !important;     /* Πιο στενοί οι μήνες για να χωράνε πολλοί */
-            max-width: 85px !important;
-            flex: 0 0 85px !important;
-        }
-        
-        /* Ρύθμιση πλάτους για την ΠΡΩΤΗ ΣΤΗΛΗ (Ακίνητο/Ενοικιαστής) - Πιο "Συμπιεσμένη" */
-        [data-testid="stHorizontalBlock"] > [data-testid="column"]:first-child {
-            min-width: 140px !important;    /* Μίκρυνε πολύ για να αφήνει χώρο */
-            max-width: 140px !important;
-            flex: 0 0 140px !important;
-            position: sticky !important;    /* Πάγωμα της στήλης */
-            left: 0 !important;
-            background-color: #ffffff !important;
-            z-index: 10 !important;
-            border-right: 2px solid #ddd !important;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.05) !important;
-        }
-    }
-    
-    /* Dark Mode υποστήριξη για την παγωμένη στήλη στο κινητό */
-    @media (prefers-color-scheme: dark) and (max-width: 900px) {
-        [data-testid="stHorizontalBlock"] > [data-testid="column"]:first-child {
-            background-color: #0e1117 !important;
-            border-right: 2px solid #333 !important;
-        }
-        [data-testid="stButton"] button {
-            background-color: #1e2127; border-color: #444; color: #ddd;
-        }
+    .matrix-cell-empty {
+        display: block;
+        width: 100%;
+        text-align: center;
+        color: #6c757d;
+        padding: 6px;
+        cursor: pointer;
+        background: none;
+        border: none;
     }
 </style>
 """
@@ -146,7 +159,7 @@ def show():
     tab_matrix, tab_list, tab_edit = st.tabs(["📊 Πίνακας Ελέγχου", "📋 Ιστορικό Όλων των Εισπράξεων", "✏️ Επεξεργασία (Γενική)"])
 
     # =========================================================================
-    # --- 1. MATRIX ΕΠΙΣΚΟΠΗΣΗ (ΜΕ NATIVE STREAMLIT BUTTONS & CSS HACK) ---
+    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ ME JS COMPONENT) ---
     # =========================================================================
     with tab_matrix:
         current_year = datetime.today().year
@@ -156,12 +169,17 @@ def show():
 
         months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
         
-        # Επικεφαλίδες Πίνακα
-        header_cols = st.columns([2.5] + [1]*12)
-        header_cols[0].markdown("<div style='font-size:12px; font-weight:bold; padding-top:10px;'>Ακίνητο & Ενοικιαστής</div>", unsafe_allow_html=True)
-        for i, m_name in enumerate(months): 
-            header_cols[i+1].markdown(f"<div style='font-size:12px; font-weight:bold; padding-top:10px; text-align:center;'>{m_name}</div>", unsafe_allow_html=True)
-        st.markdown("<hr style='margin: 5px 0px 10px 0px;'>", unsafe_allow_html=True)
+        # --- ΚΑΤΑΣΚΕΥΗ HTML/JS ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ ---
+        html_code = f"""
+        <html>
+        <head>{COMMON_CSS}</head>
+        <body>
+        <div class="matrix-wrapper">
+            <table class="matrix-table">
+                <tr><th>Ακίνητο & Ενοικιαστής</th>
+        """
+        for m in months: html_code += f'<th>{m}</th>'
+        html_code += '</tr>'
 
         for g_key, group_leases in leases_df.groupby('Group_Key'):
             l_id_list = group_leases['Lease_ID'].astype(str).tolist()
@@ -179,41 +197,69 @@ def show():
                 if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', '')).replace('nan','')} {str(t_match.iloc[0].get('Όνομα', '')).replace('nan','')}")
             tenant_name = " & ".join(t_names) if t_names else "Άγνωστος"
 
-            # Γραμμή Ακινήτου
-            row_cols = st.columns([2.5] + [1]*12)
-            
-            # 1η Στήλη: Στοιχεία
-            row_cols[0].markdown(f"<div style='font-size:13px;'>🏠 <strong>{prop_charact}</strong><br><span style='font-size:11px; opacity:0.8;'>👤 {tenant_name[:25]}</span></div>", unsafe_allow_html=True)
+            html_code += f'<tr><td>🏠 <strong>{prop_charact}</strong><br>👤 <span style="font-size: 11px; opacity: 0.8;">{tenant_name[:25]}</span></td>'
 
-            # Στήλες Μηνών
             for m_idx in range(1, 13):
-                with row_cols[m_idx]:
-                    expected_rent, active_l_id = get_expected_rent_and_lease(group_leases, selected_year, m_idx)
-                    p_month = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
-                    
-                    if p_month.empty:
-                        if st.button("❌ Κενό\n", key=f"btn_{active_l_id}_{m_idx}_{selected_year}_empty"):
-                            st.session_state.payment_modal = {"lease_id_list": l_id_list, "active_lease_id": active_l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
-                            st.session_state.action_pay_id = None; st.session_state.action_edit_id = None
-                            st.rerun()
-                    else:
-                        for p_type in p_month['Payment_Type'].unique():
-                            type_data = p_month[p_month['Payment_Type'] == p_type]
-                            is_pending = not type_data[type_data['Status'] == 'Εκκρεμεί'].empty
-                            
-                            if p_type == 'Ενοίκιο':
-                                rent_paid_amt = pd.to_numeric(type_data[type_data['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
-                                if is_pending: btn_text = f"Ενοίκιο\n⚠️ Εκκρ."
-                                elif rent_paid_amt < expected_rent: btn_text = f"Ενοίκιο\n⚠️ {rent_paid_amt:.0f}€"
-                                else: btn_text = f"Ενοίκιο\n✅ Εξοφλ."
-                            else:
-                                short_type = p_type[:5] + "." if len(p_type) > 5 else p_type
-                                btn_text = f"{short_type}\n⚠️ Εκκρ." if is_pending else f"{short_type}\n✅ Εξοφλ."
-                                    
-                            if st.button(btn_text, key=f"btn_{active_l_id}_{m_idx}_{selected_year}_{p_type}"):
-                                st.session_state.payment_modal = {"lease_id_list": l_id_list, "active_lease_id": active_l_id, "month": m_idx, "year": selected_year, "prop_charact": prop_charact, "tenant_name": tenant_name, "expected_rent": expected_rent}
-                                st.session_state.action_pay_id = None; st.session_state.action_edit_id = None
-                                st.rerun()
+                expected_rent, active_l_id = get_expected_rent_and_lease(group_leases, selected_year, m_idx)
+                p_month = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
+                
+                html_code += '<td>'
+                click_val = f"{active_l_id}|{m_idx}|{selected_year}"
+                
+                if p_month.empty:
+                    html_code += f'<button class="matrix-cell-empty" onclick="sendDataToStreamlit(\'{click_val}\')">❌ Κενό</button>'
+                else:
+                    for p_type in p_month['Payment_Type'].unique():
+                        type_data = p_month[p_month['Payment_Type'] == p_type]
+                        is_pending = not type_data[type_data['Status'] == 'Εκκρεμεί'].empty
+                        
+                        if p_type == 'Ενοίκιο':
+                            rent_paid_amt = pd.to_numeric(type_data[type_data['Status'] == 'Εξοφλήθηκε']['Amount'].astype(str).str.replace(',', '.'), errors='coerce').sum()
+                            if is_pending: btn_text = f"Ενοίκιο<br>⚠️ Εκκρ."
+                            elif rent_paid_amt < expected_rent: btn_text = f"Ενοίκιο<br>⚠️ {rent_paid_amt:.0f}€"
+                            else: btn_text = f"Ενοίκιο<br>✅ Εξοφλ."
+                        else:
+                            short_type = p_type[:5] + "." if len(p_type) > 5 else p_type
+                            btn_text = f"{short_type}<br>⚠️ Εκκρ." if is_pending else f"{short_type}<br>✅ Εξοφλ."
+                                
+                        html_code += f'<button class="matrix-cell-btn" onclick="sendDataToStreamlit(\'{click_val}\')">{btn_text}</button>'
+                html_code += '</td>'
+            html_code += '</tr>'
+            
+        html_code += """
+            </table>
+        </div>
+        <script>
+            function sendDataToStreamlit(data) {
+                // Η εντολή αυτή στέλνει τα δεδομένα "αθόρυβα" στο Streamlit Component
+                window.parent.postMessage({
+                    type: 'streamlit:setComponentValue',
+                    value: data
+                }, '*');
+            }
+        </script>
+        </body>
+        </html>
+        """
+
+        # Υπολογισμός ύψους πίνακα βάσει πλήθους ακινήτων
+        table_height = 80 + (len(leases_df['Group_Key'].unique()) * 80)
+        table_height = max(200, min(table_height, 600))
+
+        # Εμφάνιση του πίνακα και λήψη του κλικ από τη JavaScript!
+        clicked_data = components.html(html_code, height=table_height, scrolling=True)
+
+        if clicked_data:
+            parts = clicked_data.split('|')
+            if len(parts) == 3:
+                # Ενημερώνουμε το state χωρίς refresh
+                st.session_state.payment_modal = {
+                    "active_lease_id": parts[0],
+                    "month": int(parts[1]),
+                    "year": int(parts[2])
+                }
+                # Μηδενίζουμε το component για να μπορούμε να ξανακλικάρουμε το ίδιο κουμπί
+                st.rerun()
 
         # ==========================================
         # --- ΠΑΡΑΘΥΡΟ ΔΙΑΧΕΙΡΙΣΗΣ ΜΗΝΑ (MODAL) ---
