@@ -5,92 +5,26 @@ import pandas as pd
 from datetime import date, datetime
 import streamlit.components.v1 as components
 
-COMMON_CSS = """
-<style>
-    /* CSS ΓΙΑ ΤΟΝ ΕΝΙΑΙΟ HTML ΠΙΝΑΚΑ */
-    .matrix-wrapper {
-        overflow-x: auto;
-        max-width: 100%;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    .matrix-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: sans-serif;
-        font-size: 13px;
-        background: white;
-        min-width: 900px; /* Εξαναγκασμός κύλισης στο κινητό */
-    }
-    .matrix-table th {
-        background-color: #f0f2f6;
-        color: #31333F;
-        padding: 12px 8px;
-        border-bottom: 2px solid #ddd;
-        border-right: 1px solid #ddd;
-        text-align: center;
-        position: sticky;
-        top: 0;
-        z-index: 4;
-    }
-    .matrix-table td {
-        border-bottom: 1px solid #ddd;
-        border-right: 1px solid #ddd;
-        padding: 6px;
-        text-align: center;
-        vertical-align: top;
-    }
-    /* Πάγωμα Πρώτης Στήλης */
-    .matrix-table th:first-child,
-    .matrix-table td:first-child {
-        position: sticky;
-        left: 0;
-        background-color: #ffffff;
-        z-index: 5;
-        border-right: 2px solid #bbb;
-        text-align: left;
-        min-width: 160px; /* Πιο στενή πρώτη στήλη */
-    }
-    .matrix-table th:first-child { z-index: 6; }
-    
-    /* Σχεδιασμός Κελιών (Αόρατα Κουμπιά JS) */
-    .matrix-cell-btn {
-        display: block;
-        width: 100%;
-        text-align: center;
-        color: #31333F;
-        padding: 6px;
-        border-radius: 4px;
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-        margin-bottom: 4px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-size: 12px;
-    }
-    .matrix-cell-btn:hover {
-        background-color: #e2e6ea;
-        border-color: #dae0e5;
-        color: #000;
-    }
-    .matrix-cell-empty {
-        display: block;
-        width: 100%;
-        text-align: center;
-        color: #6c757d;
-        padding: 6px;
-        cursor: pointer;
-        background: none;
-        border: none;
-    }
-</style>
-"""
-
 def show():
-    st.markdown(COMMON_CSS, unsafe_allow_html=True)
+    # --- ΚΡΥΦΟ ΠΕΔΙΟ ΓΙΑ ΤΗ ΛΗΨΗ ΚΛΙΚ ΑΠΟ ΤΗ JAVASCRIPT ---
+    if "hidden_click_val" not in st.session_state:
+        st.session_state.hidden_click_val = ""
+        
+    st.text_input("hidden_click", key="hidden_click_val", label_visibility="collapsed")
+    
+    # Επεξεργασία του κλικ (Αστραπιαία ενημέρωση χωρίς Reload)
+    if st.session_state.hidden_click_val != "":
+        payload = st.session_state.hidden_click_val
+        st.session_state.hidden_click_val = ""  # Μηδενισμός για το επόμενο κλικ
+        parts = payload.split('|')
+        if len(parts) >= 3:
+            st.session_state.payment_modal = {
+                "active_lease_id": parts[0],
+                "month": int(parts[1]),
+                "year": int(parts[2])
+            }
+            st.rerun()
+
     st.header("Καταγραφή Οφειλών & Εισπράξεων")
     
     try:
@@ -106,6 +40,7 @@ def show():
         st.info("Δεν υπάρχουν ενεργές μισθώσεις.")
         return
 
+    # --- ΠΡΟΕΤΟΙΜΑΣΙΑ ΔΕΔΟΜΕΝΩΝ ΠΛΗΡΩΜΩΝ ---
     if not payments_df.empty:
         if "For_Month" not in payments_df.columns: payments_df["For_Month"] = ""
         if "For_Year" not in payments_df.columns: payments_df["For_Year"] = ""
@@ -159,7 +94,7 @@ def show():
     tab_matrix, tab_list, tab_edit = st.tabs(["📊 Πίνακας Ελέγχου", "📋 Ιστορικό Όλων των Εισπράξεων", "✏️ Επεξεργασία (Γενική)"])
 
     # =========================================================================
-    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ ME JS COMPONENT) ---
+    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ ME ΕΞΥΠΝΟ HTML TABLE) ---
     # =========================================================================
     with tab_matrix:
         current_year = datetime.today().year
@@ -169,10 +104,82 @@ def show():
 
         months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
         
-        # --- ΚΑΤΑΣΚΕΥΗ HTML/JS ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ ---
+        # --- ΚΑΤΑΣΚΕΥΗ HTML ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ (ΜΕ STICKY HEADERS KAI ΣΤΗΛΕΣ) ---
         html_code = f"""
+        <!DOCTYPE html>
         <html>
-        <head>{COMMON_CSS}</head>
+        <head>
+        <style>
+            html, body {{ height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; }}
+            .matrix-wrapper {{
+                height: 100%;
+                overflow: auto;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                box-sizing: border-box;
+            }}
+            .matrix-table {{
+                width: 100%;
+                border-collapse: separate; /* Required for sticky borders */
+                border-spacing: 0;
+                font-size: 13px;
+                background: white;
+                min-width: 950px; 
+            }}
+            .matrix-table th, .matrix-table td {{
+                padding: 6px;
+                text-align: center;
+                border-bottom: 1px solid #ddd;
+                border-right: 1px solid #ddd;
+            }}
+            .matrix-table th {{
+                background-color: #f0f2f6;
+                color: #31333F;
+                position: sticky;
+                top: 0;
+                z-index: 4;
+                box-shadow: 0 1px 0 #ddd;
+                padding: 10px 6px;
+            }}
+            .matrix-table th:first-child, .matrix-table td:first-child {{
+                position: sticky;
+                left: 0;
+                background-color: #ffffff;
+                z-index: 5;
+                text-align: left;
+                min-width: 140px; /* Πιο συμπιεσμένη 1η στήλη για τα κινητά */
+                max-width: 220px;
+                box-shadow: 1px 0 0 #bbb;
+            }}
+            .matrix-table th:first-child {{
+                z-index: 6;
+                box-shadow: 1px 1px 0 #bbb;
+            }}
+            
+            .matrix-cell-btn {{
+                display: block; width: 100%; text-align: center; color: #31333F;
+                padding: 6px; border-radius: 4px; background-color: #f8f9fa;
+                border: 1px solid #e9ecef; margin-bottom: 4px; font-weight: 500;
+                cursor: pointer; transition: all 0.2s; font-size: 12px;
+            }}
+            .matrix-cell-btn:hover {{ background-color: #e2e6ea; border-color: #dae0e5; color: #000; }}
+            .matrix-cell-empty {{
+                display: block; width: 100%; text-align: center; color: #6c757d;
+                padding: 6px; cursor: pointer; background: none; border: none; font-size: 12px;
+            }}
+            
+            @media (prefers-color-scheme: dark) {{
+                .matrix-wrapper {{ border-color: #444; }}
+                .matrix-table {{ background: #0e1117; color: white; }}
+                .matrix-table th {{ background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }}
+                .matrix-table th:first-child, .matrix-table td:first-child {{ background-color: #0e1117; box-shadow: 1px 0 0 #666; }}
+                .matrix-table th:first-child {{ box-shadow: 1px 1px 0 #666; }}
+                .matrix-table td {{ border-color: #444; color: white; }}
+                .matrix-cell-btn {{ background-color: #1e2127; border-color: #444; color: #ddd; }}
+                .matrix-cell-btn:hover {{ background-color: #2a2e37; color: #fff; }}
+            }}
+        </style>
+        </head>
         <body>
         <div class="matrix-wrapper">
             <table class="matrix-table">
@@ -204,10 +211,10 @@ def show():
                 p_month = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
                 
                 html_code += '<td>'
-                click_val = f"{active_l_id}|{m_idx}|{selected_year}"
+                click_args = f"'{active_l_id}', {m_idx}, {selected_year}"
                 
                 if p_month.empty:
-                    html_code += f'<button class="matrix-cell-empty" onclick="sendDataToStreamlit(\'{click_val}\')">❌ Κενό</button>'
+                    html_code += f'<button class="matrix-cell-empty" onclick="triggerPython({click_args})">❌ Κενό</button>'
                 else:
                     for p_type in p_month['Payment_Type'].unique():
                         type_data = p_month[p_month['Payment_Type'] == p_type]
@@ -222,7 +229,7 @@ def show():
                             short_type = p_type[:5] + "." if len(p_type) > 5 else p_type
                             btn_text = f"{short_type}<br>⚠️ Εκκρ." if is_pending else f"{short_type}<br>✅ Εξοφλ."
                                 
-                        html_code += f'<button class="matrix-cell-btn" onclick="sendDataToStreamlit(\'{click_val}\')">{btn_text}</button>'
+                        html_code += f'<button class="matrix-cell-btn" onclick="triggerPython({click_args})">{btn_text}</button>'
                 html_code += '</td>'
             html_code += '</tr>'
             
@@ -230,36 +237,41 @@ def show():
             </table>
         </div>
         <script>
-            function sendDataToStreamlit(data) {
-                // Η εντολή αυτή στέλνει τα δεδομένα "αθόρυβα" στο Streamlit Component
-                window.parent.postMessage({
-                    type: 'streamlit:setComponentValue',
-                    value: data
-                }, '*');
+            // JS που βρίσκει το κρυφό text_input και το "εξαφανίζει" εντελώς
+            (function hideInput() {
+                var pDoc = window.parent.document;
+                var input = pDoc.querySelector('input[aria-label="hidden_click"]');
+                if (input) {
+                    var wrapper = input.closest('div[data-testid="stTextInput"]');
+                    if (wrapper) wrapper.style.display = 'none';
+                } else {
+                    setTimeout(hideInput, 100);
+                }
+            })();
+
+            // Αθόρυβη αποστολή του κλικ στην Python!
+            function triggerPython(lid, m, y) {
+                var payload = lid + '|' + m + '|' + y + '|' + Date.now();
+                var pDoc = window.parent.document;
+                var input = pDoc.querySelector('input[aria-label="hidden_click"]');
+                if(input) {
+                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                    nativeSetter.call(input, payload);
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                    input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+                }
             }
         </script>
         </body>
         </html>
         """
 
-        # Υπολογισμός ύψους πίνακα βάσει πλήθους ακινήτων
-        table_height = 80 + (len(leases_df['Group_Key'].unique()) * 80)
-        table_height = max(200, min(table_height, 600))
+        # Υπολογισμός δυναμικού ύψους για να μην περισσεύει κενός χώρος
+        num_properties = len(leases_df['Group_Key'].unique())
+        table_height = max(150, min(100 + num_properties * 65, 650))
 
-        # Εμφάνιση του πίνακα και λήψη του κλικ από τη JavaScript!
-        clicked_data = components.html(html_code, height=table_height, scrolling=True)
-
-        if clicked_data:
-            parts = clicked_data.split('|')
-            if len(parts) == 3:
-                # Ενημερώνουμε το state χωρίς refresh
-                st.session_state.payment_modal = {
-                    "active_lease_id": parts[0],
-                    "month": int(parts[1]),
-                    "year": int(parts[2])
-                }
-                # Μηδενίζουμε το component για να μπορούμε να ξανακλικάρουμε το ίδιο κουμπί
-                st.rerun()
+        # Εμφάνιση του πίνακα (ΔΕΝ του ζητάμε να επιστρέψει value, άρα δεν θα βγάλει ποτέ AttributeError!)
+        components.html(html_code, height=table_height, scrolling=False)
 
         # ==========================================
         # --- ΠΑΡΑΘΥΡΟ ΔΙΑΧΕΙΡΙΣΗΣ ΜΗΝΑ (MODAL) ---
