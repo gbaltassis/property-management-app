@@ -5,12 +5,12 @@ import pandas as pd
 from datetime import date, datetime
 import streamlit.components.v1 as components
 
-COMMON_CSS = """
-<style>
-    /* CSS ΓΙΑ ΤΟΝ ΕΝΙΑΙΟ HTML ΠΙΝΑΚΑ */
-    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; }
+# Το CSS που θα ενσωματωθεί ΜΕΣΑ στον HTML Πίνακα
+TABLE_CSS = """
+    html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
     .matrix-wrapper {
         height: 100%;
+        width: 100%;
         overflow: auto;
         border: 1px solid #ddd;
         border-radius: 8px;
@@ -58,7 +58,7 @@ COMMON_CSS = """
         display: block; width: 100%; text-align: center; color: #31333F;
         padding: 6px; border-radius: 4px; background-color: #f8f9fa;
         border: 1px solid #e9ecef; margin-bottom: 4px; font-weight: 500;
-        cursor: pointer; transition: all 0.2s; font-size: 12px;
+        cursor: pointer; transition: all 0.2s; font-size: 12px; line-height: 1.3;
     }
     .matrix-cell-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; color: #000; }
     .matrix-cell-empty {
@@ -76,7 +76,6 @@ COMMON_CSS = """
         .matrix-cell-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
         .matrix-cell-btn:hover { background-color: #2a2e37; color: #fff; }
     }
-</style>
 """
 
 # CALLBACK ΠΟΥ ΛΥΝΕΙ ΤΟ ΣΦΑΛΜΑ TOY STREAMLIT
@@ -90,14 +89,12 @@ def handle_matrix_click():
                 "month": int(parts[1]),
                 "year": int(parts[2])
             }
-        # Ασφαλής μηδενισμός ΜΕΣΑ στο callback!
         st.session_state.hidden_click_val = ""
 
 def show():
     # --- ΚΡΥΦΟ ΠΕΔΙΟ ΓΙΑ ΤΗ ΛΗΨΗ ΚΛΙΚ ΑΠΟ ΤΗ JAVASCRIPT ---
     st.text_input("hidden_click", key="hidden_click_val", label_visibility="collapsed", on_change=handle_matrix_click)
     
-    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Καταγραφή Οφειλών & Εισπράξεων")
     
     try:
@@ -177,13 +174,13 @@ def show():
 
         months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
         
-        # --- ΚΑΤΑΣΚΕΥΗ HTML ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ ---
+        # --- ΚΑΤΑΣΚΕΥΗ HTML ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ ΣΩΣΤΑ ΑΥΤΗ ΤΗ ΦΟΡΑ ---
         html_code = f"""
         <!DOCTYPE html>
         <html>
         <head>
         <style>
-            /* Το CSS έχει ήδη περαστεί μέσω της Python */
+            {TABLE_CSS}
         </style>
         </head>
         <body>
@@ -243,14 +240,15 @@ def show():
             </table>
         </div>
         <script>
-            // JS που βρίσκει το κρυφό text_input και το "εξαφανίζει" εντελώς
+            // JS που βρίσκει το κρυφό text_input και το "εξαφανίζει" οπτικά, αφήνοντας το λειτουργικό
             (function hideInput() {
                 var pDoc = window.parent.document;
                 var inputs = pDoc.querySelectorAll('input[aria-label="hidden_click"]');
                 if (inputs.length > 0) {
                     inputs.forEach(function(input) {
                         var wrapper = input.closest('div[data-testid="stTextInput"]');
-                        if (wrapper) wrapper.style.display = 'none';
+                        // Μετατροπή σε εντελώς αόρατο αντί για display:none για να λαμβάνει Events
+                        if (wrapper) { wrapper.style.position = 'absolute'; wrapper.style.opacity = '0'; wrapper.style.pointerEvents = 'none'; wrapper.style.height = '0px'; wrapper.style.overflow = 'hidden'; }
                     });
                 } else {
                     setTimeout(hideInput, 100);
@@ -274,12 +272,9 @@ def show():
         </html>
         """
 
-        # Υπολογισμός δυναμικού ύψους για να μην περισσεύει κενός χώρος
-        num_properties = len(leases_df['Group_Key'].unique())
-        table_height = max(150, min(100 + num_properties * 65, 650))
-
-        # Εμφάνιση του πίνακα
-        components.html(html_code, height=table_height, scrolling=False)
+        # Υπολογισμός ύψους iframe ώστε να δείχνει το grid σωστά.
+        # Scrolling=True επιτρέπει την κύλιση πάνω-κάτω ΜΕΣΑ στο iframe αν τα ακίνητα είναι πολλά!
+        components.html(html_code, height=600, scrolling=True)
 
         # ==========================================
         # --- ΠΑΡΑΘΥΡΟ ΔΙΑΧΕΙΡΙΣΗΣ ΜΗΝΑ (MODAL) ---
