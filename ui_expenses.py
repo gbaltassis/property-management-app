@@ -35,20 +35,17 @@ def show():
                 name = f"{str(p.get(f'Name_{i}', '')).strip()} {str(p.get(f'Surname_{i}', '')).strip()}".strip()
                 if afm and afm != 'nan': owner_afms.add(f"{afm} - {name}")
 
-    # ΑΛΛΑΓΗ ΣΕΙΡΑΣ ΕΔΩ: Πρώτα το Ιστορικό, μετά το Νέο Έξοδο
     tab_list, tab_new, tab_edit = st.tabs(["📋 Ιστορικό Εξόδων", "➕ Νέο Έξοδο", "✏️ Επεξεργασία"])
 
     # --- 1. ΝΕΟ ΕΞΟΔΟ ---
     with tab_new:
         cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
         
-        # ΛΥΣΗ: Η Κατηγορία Εξόδου τοποθετείται ΕΞΩ από τη φόρμα για να είναι 100% δυναμική!
         category = st.selectbox("Κατηγορία Εξόδου *", cat_opts)
         
         st.markdown("---")
         
         with st.form("new_expense_form", clear_on_submit=True):
-            # Δυναμικά πεδία ανάλογα την επιλογή
             afm_sel, prop_sel = "", ""
             if category == "ΕΝΦΙΑ":
                 afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", list(owner_afms)) if owner_afms else st.text_input("ΑΦΜ Ιδιοκτήτη *")
@@ -89,6 +86,7 @@ def show():
                     try:
                         gsheets_service.add_expense(row)
                         st.success("Το έξοδο καταχωρήθηκε επιτυχώς!")
+                        st.rerun()
                     except Exception as e: st.error(f"Σφάλμα: {e}")
 
     # --- 2. ΙΣΤΟΡΙΚΟ ---
@@ -113,16 +111,90 @@ def show():
                     "Ποσό": f"{amt:.2f} €".replace('.', ','),
                     "Λεπτομέρειες": details
                 })
-            st.write(pd.DataFrame(exp_list[::-1]).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
+            html_table = pd.DataFrame(exp_list[::-1]).to_html(classes='custom-table', escape=False, index=False, justify='left')
+            st.write(f'<div style="overflow-x: auto; max-width: 100%;">{html_table}</div>', unsafe_allow_html=True)
 
     # --- 3. ΕΠΕΞΕΡΓΑΣΙΑ / ΔΙΑΓΡΑΦΗ ---
     with tab_edit:
         if expenses_df.empty: st.warning("Δεν υπάρχουν έξοδα.")
         else:
             e_opts = {str(r.get("Expense_ID", "")): f"{r.get('Date_Paid', '')} | {r.get('Category', '')} {r.get('Amount', '')}€" for _, r in expenses_df.iterrows()}
-            sel_exp = st.selectbox("Επιλέξτε Έξοδο προς διαγραφή", options=list(e_opts.keys()), format_func=lambda x: e_opts[x])
+            sel_exp = st.selectbox("Επιλέξτε Έξοδο προς επεξεργασία", options=list(e_opts.keys()), format_func=lambda x: e_opts[x])
+            
             if sel_exp:
-                if st.button("🗑️ Οριστική Διαγραφή Εξόδου", type="primary"):
-                    gsheets_service.delete_expense(sel_exp)
-                    st.success("Διαγράφηκε! Η σελίδα ανανεώνεται...")
-                    st.rerun()
+                sel_row = expenses_df[expenses_df["Expense_ID"] == sel_exp].iloc[0]
+                
+                cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
+                curr_cat = str(sel_row.get("Category", ""))
+                e_category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, index=cat_opts.index(curr_cat) if curr_cat in cat_opts else 0, key="edit_exp_cat")
+                
+                st.markdown("---")
+                
+                with st.form("edit_expense_form"):
+                    afm_sel, prop_sel = "", ""
+                    if e_category == "ΕΝΦΙΑ":
+                        curr_afm = str(sel_row.get("AFM", ""))
+                        afm_opts = list(owner_afms)
+                        afm_idx = 0
+                        for i, a in enumerate(afm_opts):
+                            if curr_afm in a: afm_idx = i
+                        afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", afm_opts, index=afm_idx) if afm_opts else st.text_input("ΑΦΜ Ιδιοκτήτη *", value=curr_afm)
+                    else:
+                        curr_prop = str(sel_row.get("Property_ID", ""))
+                        p_keys = list(prop_options.keys())
+                        try: p_idx = p_keys.index(curr_prop)
+                        except: p_idx = 0
+                        prop_sel = st.selectbox("Ακίνητο *", p_keys, index=p_idx, format_func=lambda x: prop_options[x]) if p_keys else ""
+
+                    ec1, ec2 = st.columns(2)
+                    with ec1: amount = st.text_input("Ποσό (€) *", value=str(sel_row.get("Amount", "")).replace('.', ','))
+                    
+                    try: pay_date = datetime.strptime(str(sel_row.get("Date_Paid", "")), "%Y-%m-%d").date()
+                    except: pay_date = date.today()
+                    with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=pay_date)
+
+                    desc, ins_comp, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", ""
+                    
+                    if e_category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
+                        desc = st.text_area("Περιγραφή (π.χ. Υδραυλικός, Διαρροή) *", value=str(sel_row.get("Description", "")).replace('nan',''))
+                    
+                    if "Ασφάλιση" in e_category:
+                        sc1, sc2, sc3 = st.columns(3)
+                        with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *", value=str(sel_row.get("Insurance_Company", "")).replace('nan',''))
+                        
+                        try: r_date = datetime.strptime(str(sel_row.get("Renewal_Date", "")), "%Y-%m-%d").date()
+                        except: r_date = date.today()
+                        with sc2: ren_date = st.date_input("Ημ/νία Ανανέωσης (Επόμενη) *", value=r_date)
+                        
+                        dur_opts = ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"]
+                        curr_dur = str(sel_row.get("Duration_Months", ""))
+                        with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", dur_opts, index=dur_opts.index(curr_dur) if curr_dur in dur_opts else 0)
+                        
+                        if e_category == "Ασφάλιση Πυρός":
+                            st.write("**Ασφαλισμένα Κεφάλαια**")
+                            bc1, bc2 = st.columns(2)
+                            with bc1: ins_build = st.text_input("Κεφάλαιο Κτιρίου (€)", value=str(sel_row.get("Insured_Building", "")).replace('.', ','))
+                            with bc2: ins_cont = st.text_input("Κεφάλαιο Περιεχομένου (€)", value=str(sel_row.get("Insured_Contents", "")).replace('.', ','))
+
+                    upd_btn = st.form_submit_button("Αποθήκευση Αλλαγών", type="primary", use_container_width=True)
+                    
+                if st.button("🗑️ Οριστική Διαγραφή Εξόδου", use_container_width=True):
+                    try:
+                        gsheets_service.delete_expense(sel_exp)
+                        st.success("Διαγράφηκε! Η σελίδα ανανεώνεται...")
+                        st.rerun()
+                    except Exception as e: st.error(f"Σφάλμα: {e}")
+
+                if upd_btn:
+                    amt_val = pd.to_numeric(amount.replace(',', '.'), errors='coerce')
+                    if pd.isna(amt_val) or amt_val <= 0:
+                        st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
+                    else:
+                        final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
+                        r_date_str = ren_date.strftime("%Y-%m-%d") if ren_date else ""
+                        new_row = [sel_exp, e_category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont]
+                        try:
+                            gsheets_service.update_expense(sel_exp, new_row)
+                            st.success("Οι αλλαγές αποθηκεύτηκαν!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Σφάλμα επεξεργασίας: {e}")
