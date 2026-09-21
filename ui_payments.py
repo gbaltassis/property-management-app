@@ -5,17 +5,84 @@ import pandas as pd
 from datetime import date, datetime
 import streamlit.components.v1 as components
 
-def show():
-    # --- ΚΡΥΦΟ ΠΕΔΙΟ ΓΙΑ ΤΗ ΛΗΨΗ ΚΛΙΚ ΑΠΟ ΤΗ JAVASCRIPT ---
-    if "hidden_click_val" not in st.session_state:
-        st.session_state.hidden_click_val = ""
-        
-    st.text_input("hidden_click", key="hidden_click_val", label_visibility="collapsed")
+COMMON_CSS = """
+<style>
+    /* CSS ΓΙΑ ΤΟΝ ΕΝΙΑΙΟ HTML ΠΙΝΑΚΑ */
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; }
+    .matrix-wrapper {
+        height: 100%;
+        overflow: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-sizing: border-box;
+    }
+    .matrix-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+        background: white;
+        min-width: 950px; 
+    }
+    .matrix-table th, .matrix-table td {
+        padding: 6px;
+        text-align: center;
+        border-bottom: 1px solid #ddd;
+        border-right: 1px solid #ddd;
+    }
+    .matrix-table th {
+        background-color: #f0f2f6;
+        color: #31333F;
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        box-shadow: 0 1px 0 #ddd;
+        padding: 10px 6px;
+    }
+    .matrix-table th:first-child, .matrix-table td:first-child {
+        position: sticky;
+        left: 0;
+        background-color: #ffffff;
+        z-index: 5;
+        text-align: left;
+        min-width: 140px;
+        max-width: 220px;
+        box-shadow: 1px 0 0 #bbb;
+    }
+    .matrix-table th:first-child {
+        z-index: 6;
+        box-shadow: 1px 1px 0 #bbb;
+    }
     
-    # Επεξεργασία του κλικ (Αστραπιαία ενημέρωση χωρίς Reload)
-    if st.session_state.hidden_click_val != "":
-        payload = st.session_state.hidden_click_val
-        st.session_state.hidden_click_val = ""  # Μηδενισμός για το επόμενο κλικ
+    .matrix-cell-btn {
+        display: block; width: 100%; text-align: center; color: #31333F;
+        padding: 6px; border-radius: 4px; background-color: #f8f9fa;
+        border: 1px solid #e9ecef; margin-bottom: 4px; font-weight: 500;
+        cursor: pointer; transition: all 0.2s; font-size: 12px;
+    }
+    .matrix-cell-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; color: #000; }
+    .matrix-cell-empty {
+        display: block; width: 100%; text-align: center; color: #6c757d;
+        padding: 6px; cursor: pointer; background: none; border: none; font-size: 12px;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+        .matrix-wrapper { border-color: #444; }
+        .matrix-table { background: #0e1117; color: white; }
+        .matrix-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
+        .matrix-table th:first-child, .matrix-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; }
+        .matrix-table th:first-child { box-shadow: 1px 1px 0 #666; }
+        .matrix-table td { border-color: #444; color: white; }
+        .matrix-cell-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
+        .matrix-cell-btn:hover { background-color: #2a2e37; color: #fff; }
+    }
+</style>
+"""
+
+# CALLBACK ΠΟΥ ΛΥΝΕΙ ΤΟ ΣΦΑΛΜΑ TOY STREAMLIT
+def handle_matrix_click():
+    payload = st.session_state.hidden_click_val
+    if payload != "":
         parts = payload.split('|')
         if len(parts) >= 3:
             st.session_state.payment_modal = {
@@ -23,8 +90,14 @@ def show():
                 "month": int(parts[1]),
                 "year": int(parts[2])
             }
-            st.rerun()
+        # Ασφαλής μηδενισμός ΜΕΣΑ στο callback!
+        st.session_state.hidden_click_val = ""
 
+def show():
+    # --- ΚΡΥΦΟ ΠΕΔΙΟ ΓΙΑ ΤΗ ΛΗΨΗ ΚΛΙΚ ΑΠΟ ΤΗ JAVASCRIPT ---
+    st.text_input("hidden_click", key="hidden_click_val", label_visibility="collapsed", on_change=handle_matrix_click)
+    
+    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Καταγραφή Οφειλών & Εισπράξεων")
     
     try:
@@ -104,80 +177,13 @@ def show():
 
         months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
         
-        # --- ΚΑΤΑΣΚΕΥΗ HTML ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ (ΜΕ STICKY HEADERS KAI ΣΤΗΛΕΣ) ---
+        # --- ΚΑΤΑΣΚΕΥΗ HTML ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ ---
         html_code = f"""
         <!DOCTYPE html>
         <html>
         <head>
         <style>
-            html, body {{ height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; }}
-            .matrix-wrapper {{
-                height: 100%;
-                overflow: auto;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                box-sizing: border-box;
-            }}
-            .matrix-table {{
-                width: 100%;
-                border-collapse: separate; /* Required for sticky borders */
-                border-spacing: 0;
-                font-size: 13px;
-                background: white;
-                min-width: 950px; 
-            }}
-            .matrix-table th, .matrix-table td {{
-                padding: 6px;
-                text-align: center;
-                border-bottom: 1px solid #ddd;
-                border-right: 1px solid #ddd;
-            }}
-            .matrix-table th {{
-                background-color: #f0f2f6;
-                color: #31333F;
-                position: sticky;
-                top: 0;
-                z-index: 4;
-                box-shadow: 0 1px 0 #ddd;
-                padding: 10px 6px;
-            }}
-            .matrix-table th:first-child, .matrix-table td:first-child {{
-                position: sticky;
-                left: 0;
-                background-color: #ffffff;
-                z-index: 5;
-                text-align: left;
-                min-width: 140px; /* Πιο συμπιεσμένη 1η στήλη για τα κινητά */
-                max-width: 220px;
-                box-shadow: 1px 0 0 #bbb;
-            }}
-            .matrix-table th:first-child {{
-                z-index: 6;
-                box-shadow: 1px 1px 0 #bbb;
-            }}
-            
-            .matrix-cell-btn {{
-                display: block; width: 100%; text-align: center; color: #31333F;
-                padding: 6px; border-radius: 4px; background-color: #f8f9fa;
-                border: 1px solid #e9ecef; margin-bottom: 4px; font-weight: 500;
-                cursor: pointer; transition: all 0.2s; font-size: 12px;
-            }}
-            .matrix-cell-btn:hover {{ background-color: #e2e6ea; border-color: #dae0e5; color: #000; }}
-            .matrix-cell-empty {{
-                display: block; width: 100%; text-align: center; color: #6c757d;
-                padding: 6px; cursor: pointer; background: none; border: none; font-size: 12px;
-            }}
-            
-            @media (prefers-color-scheme: dark) {{
-                .matrix-wrapper {{ border-color: #444; }}
-                .matrix-table {{ background: #0e1117; color: white; }}
-                .matrix-table th {{ background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }}
-                .matrix-table th:first-child, .matrix-table td:first-child {{ background-color: #0e1117; box-shadow: 1px 0 0 #666; }}
-                .matrix-table th:first-child {{ box-shadow: 1px 1px 0 #666; }}
-                .matrix-table td {{ border-color: #444; color: white; }}
-                .matrix-cell-btn {{ background-color: #1e2127; border-color: #444; color: #ddd; }}
-                .matrix-cell-btn:hover {{ background-color: #2a2e37; color: #fff; }}
-            }}
+            /* Το CSS έχει ήδη περαστεί μέσω της Python */
         </style>
         </head>
         <body>
@@ -240,10 +246,12 @@ def show():
             // JS που βρίσκει το κρυφό text_input και το "εξαφανίζει" εντελώς
             (function hideInput() {
                 var pDoc = window.parent.document;
-                var input = pDoc.querySelector('input[aria-label="hidden_click"]');
-                if (input) {
-                    var wrapper = input.closest('div[data-testid="stTextInput"]');
-                    if (wrapper) wrapper.style.display = 'none';
+                var inputs = pDoc.querySelectorAll('input[aria-label="hidden_click"]');
+                if (inputs.length > 0) {
+                    inputs.forEach(function(input) {
+                        var wrapper = input.closest('div[data-testid="stTextInput"]');
+                        if (wrapper) wrapper.style.display = 'none';
+                    });
                 } else {
                     setTimeout(hideInput, 100);
                 }
@@ -270,7 +278,7 @@ def show():
         num_properties = len(leases_df['Group_Key'].unique())
         table_height = max(150, min(100 + num_properties * 65, 650))
 
-        # Εμφάνιση του πίνακα (ΔΕΝ του ζητάμε να επιστρέψει value, άρα δεν θα βγάλει ποτέ AttributeError!)
+        # Εμφάνιση του πίνακα
         components.html(html_code, height=table_height, scrolling=False)
 
         # ==========================================
