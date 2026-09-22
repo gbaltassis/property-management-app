@@ -56,16 +56,17 @@ def show():
             with ec1: amount = st.text_input("Ποσό (€) *", value="0")
             with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=date.today())
 
-            desc, ins_comp, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", ""
+            desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
             
             if category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
                 desc = st.text_area("Περιγραφή (π.χ. Υδραυλικός, Διαρροή) *")
             
             if "Ασφάλιση" in category:
-                sc1, sc2, sc3 = st.columns(3)
+                sc1, sc2, sc3, sc4 = st.columns(4)
                 with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *")
-                with sc2: ren_date = st.date_input("Ημ/νία Ανανέωσης (Επόμενη) *")
-                with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"])
+                with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου")
+                with sc3: ren_date = st.date_input("Ημ/νία Ανανέωσης (Επόμενη) *")
+                with sc4: dur = st.selectbox("Διάρκεια Συμβολαίου", ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"])
                 
                 if category == "Ασφάλιση Πυρός":
                     st.write("**Ασφαλισμένα Κεφάλαια**")
@@ -82,7 +83,7 @@ def show():
                     final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
                     r_date_str = ren_date.strftime("%Y-%m-%d") if ren_date else ""
                     
-                    row = [exp_id, category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont]
+                    row = [exp_id, category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num]
                     try:
                         gsheets_service.add_expense(row)
                         st.success("Το έξοδο καταχωρήθηκε επιτυχώς!")
@@ -153,14 +154,15 @@ def show():
                     except: pay_date = date.today()
                     with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=pay_date)
 
-                    desc, ins_comp, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", ""
+                    desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
                     
                     if e_category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
                         desc = st.text_area("Περιγραφή (π.χ. Υδραυλικός, Διαρροή) *", value=str(sel_row.get("Description", "")).replace('nan',''))
                     
                     if "Ασφάλιση" in e_category:
-                        sc1, sc2, sc3 = st.columns(3)
+                        sc1, sc2, sc3, sc4 = st.columns(4)
                         with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *", value=str(sel_row.get("Insurance_Company", "")).replace('nan',''))
+                        with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου", value=str(sel_row.get("Contract_Number", "")).replace('nan',''))
                         
                         try: r_date = datetime.strptime(str(sel_row.get("Renewal_Date", "")), "%Y-%m-%d").date()
                         except: r_date = date.today()
@@ -192,7 +194,7 @@ def show():
                     else:
                         final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
                         r_date_str = ren_date.strftime("%Y-%m-%d") if ren_date else ""
-                        new_row = [sel_exp, e_category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont]
+                        new_row = [sel_exp, e_category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num]
                         try:
                             gsheets_service.update_expense(sel_exp, new_row)
                             st.success("Οι αλλαγές αποθηκεύτηκαν!")
