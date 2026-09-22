@@ -41,7 +41,7 @@ def show():
     with tab_new:
         cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
         
-        category = st.selectbox("Κατηγορία Εξόδου *", cat_opts)
+        category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, key="new_exp_cat")
         
         st.markdown("---")
         
@@ -156,10 +156,16 @@ def show():
                 sel_row = expenses_df[expenses_df["Expense_ID"] == sel_exp].iloc[0]
                 
                 cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
-                curr_cat = str(sel_row.get("Category", ""))
+                curr_cat = str(sel_row.get("Category", "")).strip()
+                cat_index = cat_opts.index(curr_cat) if curr_cat in cat_opts else 0
                 
-                # ΛΥΣΗ ΣΤΗΝ ΚΑΤΗΓΟΡΙΑ: Δυναμικό κλειδί (key) βάσει του ID της εγγραφής!
-                e_category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, index=cat_opts.index(curr_cat) if curr_cat in cat_opts else 0, key=f"edit_exp_cat_{sel_exp}")
+                # ΛΥΣΗ ΣΤΗΝ ΚΑΤΗΓΟΡΙΑ: Αντί να προσπαθούμε να "ξεγελάσουμε" το Streamlit με δυναμικά keys, 
+                # συγχρονίζουμε ρητά το session_state μόλις αλλάζει η επιλογή του εξόδου!
+                if f"edit_exp_cat_state" not in st.session_state or st.session_state.get("last_sel_exp") != sel_exp:
+                    st.session_state["edit_exp_cat_state"] = curr_cat
+                    st.session_state["last_sel_exp"] = sel_exp
+
+                e_category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, key="edit_exp_cat_state")
                 
                 st.markdown("---")
                 
