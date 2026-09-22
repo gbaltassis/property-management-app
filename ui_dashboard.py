@@ -2,8 +2,84 @@ import streamlit as st
 import gsheets_service
 import pandas as pd
 from datetime import datetime
+import streamlit.components.v1 as components
 
-COMMON_CSS = """<style>.custom-table { width: 100% !important; border-collapse: collapse; margin-bottom: 2rem; } .custom-table th { text-align: left !important; background-color: #f0f2f6; padding: 12px; border-bottom: 1px solid #e6e9ef; } .custom-table td { text-align: left !important; padding: 12px; border-bottom: 1px solid #e6e9ef; vertical-align: top; }</style>"""
+# =========================================================================
+# ΚΟΙΝΟ CSS & JS ΓΙΑ ΠΑΓΩΜΕΝΟΥΣ HTML ΠΙΝΑΚΕΣ & SORTING
+# =========================================================================
+COMMON_CSS = """
+<style>
+    html, body { font-family: sans-serif; }
+    .table-container { height: 500px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 600px; }
+    .custom-table th, .custom-table td { padding: 8px 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
+    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
+    .custom-table th:hover { background-color: #e2e6ea; }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 100px; max-width: 160px; white-space: normal !important; word-wrap: break-word; }
+    .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
+    
+    @media (prefers-color-scheme: dark) {
+        .table-container { border-color: #444; }
+        .custom-table { background: #0e1117; color: white; }
+        .custom-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
+        .custom-table th:hover { background-color: #383a45; }
+        .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
+        .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
+        .custom-table td { border-color: #444; }
+    }
+</style>
+"""
+
+COMMON_JS = """
+<script>
+    function sortTable(tableId, n) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById(tableId);
+        switching = true; dir = "asc"; 
+        while (switching) {
+            switching = false; rows = table.getElementsByTagName("TR");
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n]; y = rows[i + 1].getElementsByTagName("TD")[n];
+                if(!x || !y) continue;
+                let valX = x.innerText.trim().toLowerCase(); let valY = y.innerText.trim().toLowerCase();
+                if(valX.includes('€')) valX = parseFloat(valX.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                if(valY.includes('€')) valY = parseFloat(valY.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                if(valX.match(/^\\d{4}-\\d{2}-\\d{2}/)) valX = new Date(valX).getTime();
+                if(valY.match(/^\\d{4}-\\d{2}-\\d{2}/)) valY = new Date(valY).getTime();
+                
+                // Ειδικός κανόνας για τον αριθμό ημερών στη στήλη "Ημέρες ως Λήξη"
+                if(!isNaN(valX) && !isNaN(valY) && valX !== "" && valY !== "") {
+                    valX = parseFloat(valX);
+                    valY = parseFloat(valY);
+                }
+
+                if (dir == "asc") { if (valX > valY) { shouldSwitch = true; break; } } 
+                else if (dir == "desc") { if (valX < valY) { shouldSwitch = true; break; } }
+            }
+            if (shouldSwitch) { rows[i].parentNode.insertBefore(rows[i + 1], rows[i]); switching = true; switchcount ++; } 
+            else { if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; } }
+        }
+    }
+</script>
+"""
+
+def calculate_property_tax(gross_income):
+    if gross_income <= 0: return 0.0
+    taxable = gross_income * 0.95
+    tax = 0.0
+    if taxable > 36000:
+        tax += (taxable - 36000) * 0.45
+        taxable = 36000
+    if taxable > 24000:
+        tax += (taxable - 24000) * 0.35
+        taxable = 24000
+    if taxable > 12000:
+        tax += (taxable - 12000) * 0.25
+        taxable = 12000
+    if taxable > 0:
+        tax += taxable * 0.15
+    return tax
 
 def show():
     st.markdown(COMMON_CSS, unsafe_allow_html=True)
@@ -14,7 +90,7 @@ def show():
         properties_df = gsheets_service.fetch_all_properties()
         payments_df = gsheets_service.fetch_all_payments()
         try: expenses_df = gsheets_service.fetch_all_expenses()
-        except: expenses_df = pd.DataFrame() # Fallback αν δεν το έφτιαξες σωστά
+        except: expenses_df = pd.DataFrame() 
     except Exception as e:
         st.error(f"Αδυναμία φόρτωσης δεδομένων: {e}")
         return
@@ -24,7 +100,7 @@ def show():
     current_year = datetime.today().year
     selected_year = st.selectbox("Ανάλυση Έτους:", [current_year - 1, current_year, current_year + 1], index=1)
     
-    owner_finances = {} # Structure: { 'AFM': {'Name': '', 'Income': 0, 'ENFIA': 0, 'Prop_Expenses': 0} }
+    owner_finances = {} 
 
     # 1. Υπολογισμός Εσόδων ανά Ακίνητο -> Αναλογικά στον Ιδιοκτήτη
     if not payments_df.empty:
@@ -40,7 +116,6 @@ def show():
             amt = pd.to_numeric(str(p.get('Amount', '0')).replace(',', '.'), errors='coerce')
             if pd.isna(amt): amt = 0.0
             
-            # Βρίσκουμε το ακίνητο
             l_match = leases_df[leases_df['Lease_ID'] == l_id] if not leases_df.empty else pd.DataFrame()
             if not l_match.empty:
                 prop_id = str(l_match.iloc[0].get('Property_ID', ''))
@@ -73,10 +148,8 @@ def show():
                 afm = str(e.get('AFM', '')).strip()
                 if len(afm) == 8: afm = "0" + afm
                 if afm in owner_finances: owner_finances[afm]['ENFIA'] += amt
-                # Αν πληρώνει ΕΝΦΙΑ αλλά δεν έχει έσοδα, τον προσθέτουμε
                 elif afm and afm != 'nan': owner_finances[afm] = {'Name': "Ιδιοκτήτης", 'Income': 0, 'ENFIA': amt, 'Prop_Expenses': 0}
             else:
-                # Έξοδο ακινήτου (Ασφάλεια, Ζημιά) - Μοιράζεται βάσει ποσοστού
                 prop_id = str(e.get('Property_ID', ''))
                 p_match = properties_df[properties_df['Property_ID'] == prop_id] if not properties_df.empty else pd.DataFrame()
                 if not p_match.empty:
@@ -88,23 +161,16 @@ def show():
                         perc = pd.to_numeric(str(prop.get(f'Perc_{i}', '0')).replace(',', '.'), errors='coerce')
                         if pd.isna(perc): perc = 0.0
                         
-                        # Θεωρούμε ότι τα έξοδα βαρύνουν τον Επικαρπωτή / Πλήρη Κύριο
                         if afm and afm != 'nan' and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
                             if afm in owner_finances: owner_finances[afm]['Prop_Expenses'] += amt * (perc / 100.0)
 
-    # 3. Εμφάνιση Αποτελεσμάτων (Οικονομική Ακτινογραφία)
+    # 3. Εμφάνιση Αποτελεσμάτων
     if not owner_finances:
         st.info("Δεν βρέθηκαν ολοκληρωμένες οικονομικές κινήσεις για το επιλεγμένο έτος.")
     else:
         for afm, data in owner_finances.items():
             inc = data['Income']
-            
-            # Υπολογισμός Φόρου επί του *Πραγματικού* Εισπραχθέντος
-            tax = 0
-            if inc <= 12000: tax = inc * 0.15
-            elif inc <= 24000: tax = (12000 * 0.15) + ((inc - 12000) * 0.25)
-            elif inc <= 35000: tax = (12000 * 0.15) + (12000 * 0.25) + ((inc - 24000) * 0.35)
-            else: tax = (12000 * 0.15) + (12000 * 0.25) + (11000 * 0.35) + ((inc - 35000) * 0.45)
+            tax = calculate_property_tax(inc) # Χρήση της σωστής μαθηματικής συνάρτησης
             
             enfia = data['ENFIA']
             prop_exp = data['Prop_Expenses']
@@ -142,5 +208,42 @@ def show():
                     "Ημέρες ως Λήξη": days_rem,
                     "Μίσθωμα": f"{safe_rent:.2f} €".replace('.', ',')
                 })
-        if active_leases: st.write(pd.DataFrame(active_leases).to_html(classes='custom-table', escape=False, index=False, justify='left'), unsafe_allow_html=True)
-        else: st.success("Δεν υπάρχουν ενεργές μισθώσεις.")
+                
+        if not active_leases:
+            st.success("Δεν υπάρχουν ενεργές μισθώσεις.")
+        else:
+            # HTML Παγωμένος Πίνακας Dashboard
+            html_code = f"""
+            <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
+            <div class="table-container">
+                <table id="dash-lease-table" class="custom-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable('dash-lease-table', 0)">Ακίνητο ⇕</th>
+                            <th onclick="sortTable('dash-lease-table', 1)">Λήξη ⇕</th>
+                            <th onclick="sortTable('dash-lease-table', 2)">Ημέρες ως Λήξη ⇕</th>
+                            <th onclick="sortTable('dash-lease-table', 3)">Μίσθωμα ⇕</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+            for item in active_leases:
+                # Χρωματισμός των ημερών αν είναι λιγότερες από 60
+                rem_color = "color: #dc3545; font-weight: bold;" if item['Ημέρες ως Λήξη'] <= 60 else ""
+                html_code += f"""
+                        <tr>
+                            <td>{item['Ακίνητο']}</td>
+                            <td>{item['Λήξη']}</td>
+                            <td style="{rem_color}">{item['Ημέρες ως Λήξη']}</td>
+                            <td><strong>{item['Μίσθωμα']}</strong></td>
+                        </tr>
+                """
+            html_code += f"""
+                    </tbody>
+                </table>
+            </div>
+            {COMMON_JS}
+            </body></html>
+            """
+            t_height = min(550, 150 + len(active_leases) * 45)
+            components.html(html_code, height=t_height, scrolling=False)
