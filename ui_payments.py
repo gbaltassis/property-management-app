@@ -2,12 +2,18 @@ import streamlit as st
 import gsheets_service
 import uuid
 import pandas as pd
+import time
 from datetime import date, datetime
 import streamlit.components.v1 as components
 
-# Το CSS που θα ενσωματωθεί ΜΕΣΑ στον HTML Πίνακα
-TABLE_CSS = """
-    html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
+# =========================================================================
+# CSS & JS ΓΙΑ ΤΟΥΣ ΠΑΓΩΜΕΝΟΥΣ ΠΙΝΑΚΕΣ, ΤΟ SORTING ΚΑΙ ΤΑ EVENTS
+# =========================================================================
+COMMON_CSS = """
+<style>
+    html, body { font-family: sans-serif; }
+    
+    /* 1. CSS ΓΙΑ ΤΟ MATRIX (GRID) */
     .matrix-wrapper {
         height: 100%;
         width: 100%;
@@ -53,7 +59,6 @@ TABLE_CSS = """
         z-index: 6;
         box-shadow: 1px 1px 0 #bbb;
     }
-    
     .matrix-cell-btn {
         display: block; width: 100%; text-align: center; color: #31333F;
         padding: 6px; border-radius: 4px; background-color: #f8f9fa;
@@ -65,23 +70,124 @@ TABLE_CSS = """
         display: block; width: 100%; text-align: center; color: #6c757d;
         padding: 6px; cursor: pointer; background: none; border: none; font-size: 12px;
     }
-    
-    @media (prefers-color-scheme: dark) {
-        .matrix-wrapper { border-color: #444; }
-        .matrix-table { background: #0e1117; color: white; }
-        .matrix-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
-        .matrix-table th:first-child, .matrix-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; }
-        .matrix-table th:first-child { box-shadow: 1px 1px 0 #666; }
-        .matrix-table td { border-color: #444; color: white; }
-        .matrix-cell-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
-        .matrix-cell-btn:hover { background-color: #2a2e37; color: #fff; }
+
+    /* 2. CSS ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ ΙΣΤΟΡΙΚΟΥ (LIST) */
+    .table-container {
+        height: 550px;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
     }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 950px; }
+    .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; }
+    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s; }
+    .custom-table th:hover { background-color: #e2e6ea; }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 110px; }
+    .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
+    
+    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 12px; font-weight: bold; transition: 0.2s; text-align: center; }
+    .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
+
+    @media (prefers-color-scheme: dark) {
+        .matrix-wrapper, .table-container { border-color: #444; }
+        .matrix-table, .custom-table { background: #0e1117; color: white; }
+        .matrix-table th, .custom-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
+        .matrix-table th:first-child, .matrix-table td:first-child,
+        .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
+        .matrix-table th:first-child, .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
+        .matrix-table td, .custom-table td { border-color: #444; color: white; }
+        .matrix-cell-btn, .action-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
+        .matrix-cell-btn:hover, .action-btn:hover { background-color: #2a2e37; color: #fff; }
+    }
+</style>
 """
 
-# CALLBACK ΠΟΥ ΛΥΝΕΙ ΤΟ ΣΦΑΛΜΑ TOY STREAMLIT
+COMMON_JS = """
+<script>
+    function sortTable(tableId, n) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById(tableId);
+        switching = true;
+        dir = "asc"; 
+        while (switching) {
+            switching = false;
+            rows = table.getElementsByTagName("TR");
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                if(!x || !y) continue;
+                
+                let valX = x.innerText.trim().toLowerCase();
+                let valY = y.innerText.trim().toLowerCase();
+                
+                if(valX.includes('€')) valX = parseFloat(valX.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                if(valY.includes('€')) valY = parseFloat(valY.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                
+                if(valX.match(/^\\d{4}-\\d{2}-\\d{2}/)) valX = new Date(valX).getTime();
+                if(valY.match(/^\\d{4}-\\d{2}-\\d{2}/)) valY = new Date(valY).getTime();
+                
+                if (dir == "asc") {
+                    if (valX > valY) { shouldSwitch = true; break; }
+                } else if (dir == "desc") {
+                    if (valX < valY) { shouldSwitch = true; break; }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount ++;      
+            } else {
+                if (switchcount == 0 && dir == "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+    }
+
+    (function hideInput() {
+        var pDoc = window.parent.document;
+        var inputs = pDoc.querySelectorAll('input[aria-label^="hidden_pay_"]');
+        if (inputs.length > 0) {
+            inputs.forEach(function(input) {
+                var wrapper = input.closest('div[data-testid="stTextInput"]');
+                if (wrapper) { 
+                    wrapper.style.position = 'absolute'; 
+                    wrapper.style.opacity = '0'; 
+                    wrapper.style.pointerEvents = 'none'; 
+                    wrapper.style.height = '0px'; 
+                    wrapper.style.overflow = 'hidden'; 
+                }
+            });
+        } else {
+            setTimeout(hideInput, 100);
+        }
+    })();
+
+    function triggerPython(action_val, input_name) {
+        var payload = action_val + '|' + Date.now();
+        var pDoc = window.parent.document;
+        var input = pDoc.querySelector('input[aria-label="' + input_name + '"]');
+        if(input) {
+            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            nativeSetter.call(input, payload);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+        }
+    }
+</script>
+"""
+
+# =========================================================================
+# ROUTING & CALLBACK HANDLERS
+# =========================================================================
 def handle_matrix_click():
-    payload = st.session_state.hidden_click_val
-    if payload != "":
+    payload = st.session_state.hidden_pay_matrix_val
+    if payload:
         parts = payload.split('|')
         if len(parts) >= 3:
             st.session_state.payment_modal = {
@@ -89,12 +195,29 @@ def handle_matrix_click():
                 "month": int(parts[1]),
                 "year": int(parts[2])
             }
-        st.session_state.hidden_click_val = ""
+        st.session_state.hidden_pay_matrix_val = ""
+
+def handle_list_action():
+    val = st.session_state.hidden_pay_list_val
+    if val:
+        parts = val.split('|')
+        if parts[0].startswith("EDIT_"):
+            st.session_state.pay_list_action = 'edit'
+            st.session_state.action_pay_list_id = parts[0].replace("EDIT_", "")
+        st.session_state.hidden_pay_list_val = ""
 
 def show():
-    # --- ΚΡΥΦΟ ΠΕΔΙΟ ΓΙΑ ΤΗ ΛΗΨΗ ΚΛΙΚ ΑΠΟ ΤΗ JAVASCRIPT ---
-    st.text_input("hidden_click", key="hidden_click_val", label_visibility="collapsed", on_change=handle_matrix_click)
-    
+    # Setup State Routing
+    if "payment_modal" not in st.session_state: st.session_state.payment_modal = None
+    if "action_pay_id" not in st.session_state: st.session_state.action_pay_id = None
+    if "action_edit_id" not in st.session_state: st.session_state.action_edit_id = None
+    if "pay_list_action" not in st.session_state: st.session_state.pay_list_action = None
+    if "action_pay_list_id" not in st.session_state: st.session_state.action_pay_list_id = None
+
+    # Hidden text inputs
+    st.text_input("hidden_pay_matrix", key="hidden_pay_matrix_val", label_visibility="collapsed", on_change=handle_matrix_click)
+    st.text_input("hidden_pay_list", key="hidden_pay_list_val", label_visibility="collapsed", on_change=handle_list_action)
+
     st.header("Καταγραφή Οφειλών & Εισπράξεων")
     
     try:
@@ -110,7 +233,7 @@ def show():
         st.info("Δεν υπάρχουν ενεργές μισθώσεις.")
         return
 
-    # --- ΠΡΟΕΤΟΙΜΑΣΙΑ ΔΕΔΟΜΕΝΩΝ ΠΛΗΡΩΜΩΝ ---
+    # Προετοιμασία δεδομένων πληρωμών
     if not payments_df.empty:
         if "For_Month" not in payments_df.columns: payments_df["For_Month"] = ""
         if "For_Year" not in payments_df.columns: payments_df["For_Year"] = ""
@@ -134,11 +257,21 @@ def show():
     else:
         payments_df = pd.DataFrame(columns=['Payment_ID', 'Lease_ID', 'Payment_Type', 'Amount', 'Date_Received', 'Bank_Account', 'For_Month', 'For_Year', 'Status', 'Description', 'Calc_Month', 'Calc_Year'])
 
-    if "payment_modal" not in st.session_state: st.session_state.payment_modal = None
-    if "action_pay_id" not in st.session_state: st.session_state.action_pay_id = None
-    if "action_edit_id" not in st.session_state: st.session_state.action_edit_id = None
+    # Λεξικό Επιλογών Μισθώσεων για αναζήτηση & εμφάνιση
+    l_opts_all = {}
+    for _, r in leases_df.iterrows():
+        l_id = str(r.get("Lease_ID", ""))
+        p_id = str(r.get("Property_ID", ""))
+        p_charact = "-"
+        p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
+        if not p_match.empty: p_charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '-'))
+        t_names = []
+        for tid_clean in [t.strip() for t in str(r.get("Tenant_ID", "")).split(',') if t.strip()]:
+            t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
+            if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}")
+        l_opts_all[l_id] = f"{' & '.join(t_names) if t_names else 'Άγνωστος'} | {p_charact}"
 
-    # --- ΕΞΥΠΝΗ ΟΜΑΔΟΠΟΙΗΣΗ ΜΙΣΘΩΣΕΩΝ ---
+    # Έξυπνη ομαδοποίηση μισθώσεων
     leases_df['Group_Key'] = leases_df['Property_ID'] + "_" + leases_df['Tenant_ID']
 
     def get_expected_rent_and_lease(group_leases, y, m):
@@ -161,10 +294,10 @@ def show():
         rent = pd.to_numeric(str(latest.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
         return rent if pd.notna(rent) else 0.0, str(latest['Lease_ID'])
 
-    tab_matrix, tab_list, tab_edit = st.tabs(["📊 Πίνακας Ελέγχου", "📋 Ιστορικό Όλων των Εισπράξεων", "✏️ Επεξεργασία (Γενική)"])
+    tab_matrix, tab_list = st.tabs(["📊 Πίνακας Ελέγχου", "📋 Ιστορικό Όλων των Εισπράξεων"])
 
     # =========================================================================
-    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ ME ΕΞΥΠΝΟ HTML TABLE) ---
+    # --- 1. MATRIX (ΕΤΗΣΙΑ ΕΠΙΣΚΟΠΗΣΗ - ΑΘΙΚΤΟ) ---
     # =========================================================================
     with tab_matrix:
         current_year = datetime.today().year
@@ -174,16 +307,8 @@ def show():
 
         months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
         
-        # --- ΚΑΤΑΣΚΕΥΗ HTML ΚΩΔΙΚΑ ΓΙΑ ΤΟΝ ΠΙΝΑΚΑ ΣΩΣΤΑ ΑΥΤΗ ΤΗ ΦΟΡΑ ---
         html_code = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-            {TABLE_CSS}
-        </style>
-        </head>
-        <body>
+        <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
         <div class="matrix-wrapper">
             <table class="matrix-table">
                 <tr><th>Ακίνητο & Ενοικιαστής</th>
@@ -214,10 +339,10 @@ def show():
                 p_month = payments_df[(payments_df['Lease_ID'].isin(l_id_list)) & (payments_df['Calc_Month'] == str(m_idx)) & (payments_df['Calc_Year'] == str(selected_year))]
                 
                 html_code += '<td>'
-                click_args = f"'{active_l_id}', {m_idx}, {selected_year}"
+                click_payload = f"{active_l_id}|{m_idx}|{selected_year}"
                 
                 if p_month.empty:
-                    html_code += f'<button class="matrix-cell-empty" onclick="triggerPython({click_args})">❌ Κενό</button>'
+                    html_code += f'<button class="matrix-cell-empty" onclick="triggerPython(\'{click_payload}\', \'hidden_pay_matrix\')">❌ Κενό</button>'
                 else:
                     for p_type in p_month['Payment_Type'].unique():
                         type_data = p_month[p_month['Payment_Type'] == p_type]
@@ -232,60 +357,26 @@ def show():
                             short_type = p_type[:5] + "." if len(p_type) > 5 else p_type
                             btn_text = f"{short_type}<br>⚠️ Εκκρ." if is_pending else f"{short_type}<br>✅ Εξοφλ."
                                 
-                        html_code += f'<button class="matrix-cell-btn" onclick="triggerPython({click_args})">{btn_text}</button>'
+                        html_code += f'<button class="matrix-cell-btn" onclick="triggerPython(\'{click_payload}\', \'hidden_pay_matrix\')">{btn_text}</button>'
                 html_code += '</td>'
             html_code += '</tr>'
             
-        html_code += """
+        html_code += f"""
             </table>
         </div>
-        <script>
-            // JS που βρίσκει το κρυφό text_input και το "εξαφανίζει" οπτικά, αφήνοντας το λειτουργικό
-            (function hideInput() {
-                var pDoc = window.parent.document;
-                var inputs = pDoc.querySelectorAll('input[aria-label="hidden_click"]');
-                if (inputs.length > 0) {
-                    inputs.forEach(function(input) {
-                        var wrapper = input.closest('div[data-testid="stTextInput"]');
-                        // Μετατροπή σε εντελώς αόρατο αντί για display:none για να λαμβάνει Events
-                        if (wrapper) { wrapper.style.position = 'absolute'; wrapper.style.opacity = '0'; wrapper.style.pointerEvents = 'none'; wrapper.style.height = '0px'; wrapper.style.overflow = 'hidden'; }
-                    });
-                } else {
-                    setTimeout(hideInput, 100);
-                }
-            })();
-
-            // Αθόρυβη αποστολή του κλικ στην Python!
-            function triggerPython(lid, m, y) {
-                var payload = lid + '|' + m + '|' + y + '|' + Date.now();
-                var pDoc = window.parent.document;
-                var input = pDoc.querySelector('input[aria-label="hidden_click"]');
-                if(input) {
-                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                    nativeSetter.call(input, payload);
-                    input.dispatchEvent(new Event('input', {bubbles: true}));
-                    input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-                }
-            }
-        </script>
-        </body>
-        </html>
+        {COMMON_JS}
+        </body></html>
         """
 
-        # Υπολογισμός ύψους iframe ώστε να δείχνει το grid σωστά.
-        # Scrolling=True επιτρέπει την κύλιση πάνω-κάτω ΜΕΣΑ στο iframe αν τα ακίνητα είναι πολλά!
         components.html(html_code, height=600, scrolling=True)
 
-        # ==========================================
-        # --- ΠΑΡΑΘΥΡΟ ΔΙΑΧΕΙΡΙΣΗΣ ΜΗΝΑ (MODAL) ---
-        # ==========================================
+        # Modal Διαχείρισης Μήνα
         if st.session_state.payment_modal:
             m_info = st.session_state.payment_modal
             active_l_id = m_info["active_lease_id"]
             m_idx = m_info["month"]
             selected_year = m_info["year"]
             
-            # Υπολογισμός Δεδομένων Modal
             active_l_row = leases_df[leases_df['Lease_ID'] == active_l_id]
             if not active_l_row.empty:
                 p_id = str(active_l_row.iloc[0].get('Property_ID', ''))
@@ -330,7 +421,6 @@ def show():
                     display_type = f"{p_row['Payment_Type']} ({desc_text})" if desc_text else p_row['Payment_Type']
                     
                     with st.container(border=True):
-                        # --- ΠΛΗΡΩΜΗ ---
                         if st.session_state.action_pay_id == pid:
                             st.write(f"💳 **Ολοκλήρωση Πληρωμής:** {display_type} | {amt:.2f}€")
                             pay_c1, pay_c2, pay_c3, pay_c4 = st.columns([2, 2, 1, 1])
@@ -342,16 +432,17 @@ def show():
                                 try:
                                     new_row = [pid, p_row['Lease_ID'], p_row['Payment_Type'], p_row['Amount'], pay_date.strftime("%Y-%m-%d"), pay_bank, p_row['For_Month'], p_row['For_Year'], "Εξοφλήθηκε", p_row.get('Description', '')]
                                     gsheets_service.update_payment(pid, new_row)
-                                    st.session_state.action_pay_id = None; st.rerun()
+                                    st.success("Εξοφλήθηκε επιτυχώς!")
+                                    time.sleep(1.5)
+                                    st.session_state.action_pay_id = None
+                                    st.rerun()
                                 except Exception as e: st.error(f"Σφάλμα: {e}")
                             if pay_c4.button("Άκυρο", key=f"c_pay_{pid}", use_container_width=True):
                                 st.session_state.action_pay_id = None; st.rerun()
                         
-                        # --- ΕΠΕΞΕΡΓΑΣΙΑ (INLINE) ---
                         elif st.session_state.action_edit_id == pid:
                             st.write(f"✏️ **Επεξεργασία Εγγραφής**")
                             e_c1, e_c2, e_c3 = st.columns(3)
-                            
                             type_opts = ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"]
                             e_type = e_c1.selectbox("Είδος", type_opts, index=type_opts.index(p_row['Payment_Type']) if p_row['Payment_Type'] in type_opts else 0, key=f"et_{pid}")
                             e_amt = e_c2.text_input("Ποσό (€)", value=str(p_row['Amount']).replace('.', ','), key=f"ea_{pid}")
@@ -373,17 +464,18 @@ def show():
                                     final_bank = "Εκκρεμεί" if e_status == "Εκκρεμεί" else e_bank
                                     new_row = [pid, p_row['Lease_ID'], e_type, e_amt, e_date.strftime("%Y-%m-%d"), final_bank, p_row['For_Month'], p_row['For_Year'], e_status, e_desc]
                                     gsheets_service.update_payment(pid, new_row)
-                                    st.session_state.action_edit_id = None; st.rerun()
+                                    st.success("Αποθηκεύτηκε!")
+                                    time.sleep(1.5)
+                                    st.session_state.action_edit_id = None
+                                    st.rerun()
                                 except Exception as e: st.error(f"Σφάλμα: {e}")
                             if e_c7.button("Άκυρο", key=f"c_edit_{pid}", use_container_width=True):
                                 st.session_state.action_edit_id = None; st.rerun()
 
-                        # --- ΠΡΟΒΟΛΗ ---
                         else:
                             icon = "⚠️" if is_pending else "✅"
                             pc1, pc2, pc3, pc4 = st.columns([3, 2, 2, 3])
                             pc1.write(f"**{icon} {display_type}** | {amt:.2f}€")
-                            
                             if is_pending:
                                 pc2.write(f"Ημ/νία Έκδοσης: {p_row['Date_Received']}")
                                 pc3.write("Κατάσταση: **Εκκρεμεί**")
@@ -398,9 +490,11 @@ def show():
                             if bc2.button("✏️ Επεξ.", key=f"btn_e_{pid}"):
                                 st.session_state.action_edit_id = pid; st.session_state.action_pay_id = None; st.rerun()
                             if bc3.button("🗑️ Διαγρ.", key=f"btn_d_{pid}"):
-                                gsheets_service.delete_payment(pid); st.rerun()
+                                gsheets_service.delete_payment(pid)
+                                st.success("Διαγράφηκε!")
+                                time.sleep(1.5)
+                                st.rerun()
 
-            # --- ΠΡΟΣΘΗΚΗ ΝΕΑΣ ΟΦΕΙΛΗΣ ---
             st.markdown("#### ➕ Προσθήκη Νέας Καταχώρησης")
             with st.form("add_monthly_payment_form"):
                 fc1, fc2, fc3 = st.columns([2, 2, 2])
@@ -427,92 +521,222 @@ def show():
                             clean_status = "Εξοφλήθηκε" if is_exof else "Εκκρεμεί"
                             gsheets_service.add_payment([f"PAY-{uuid.uuid4().hex[:6].upper()}", active_l_id, p_type, p_amt, p_date.strftime("%Y-%m-%d"), p_bank, str(m_idx), str(selected_year), clean_status, p_desc])
                             st.success("Καταχωρήθηκε!")
+                            time.sleep(1.5)
                             st.rerun() 
                         except Exception as e: st.error(f"Σφάλμα: {e}")
                     else: st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
 
     # =========================================================================
-    # --- 2. ΙΣΤΟΡΙΚΟ ---
+    # --- 2. ΙΣΤΟΡΙΚΟ ΟΛΩΝ ΤΩΝ ΕΙΣΠΡΑΞΕΩΝ (SPA: LIST / NEW / EDIT) ---
     # =========================================================================
     with tab_list:
-        if payments_df.empty: st.info("Δεν έχουν καταγραφεί εισπράξεις.")
-        else:
-            pay_list_data = []
-            
-            l_opts_all = {}
-            for _, r in leases_df.iterrows():
-                l_id = str(r.get("Lease_ID", ""))
-                p_id = str(r.get("Property_ID", ""))
-                p_charact = "-"
-                p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
-                if not p_match.empty: p_charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '-'))
-                t_names = []
-                for tid_clean in [t.strip() for t in str(r.get("Tenant_ID", "")).split(',') if t.strip()]:
-                    t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
-                    if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}")
-                l_opts_all[l_id] = f"{' & '.join(t_names) if t_names else 'Άγνωστος'} | {p_charact}"
-                
-            for _, row in payments_df.iterrows():
-                amt_val = pd.to_numeric(str(row.get('Amount', '0')).replace(',', '.'), errors='coerce')
-                if pd.isna(amt_val): amt_val = 0.0
-                
-                d_text = str(row.get("Description", "")).replace('nan','')
-                cat_display = f"{row.get('Payment_Type', '')} ({d_text})" if d_text else row.get("Payment_Type", "")
-                
-                pay_list_data.append({
-                    "Ημερομηνία": row.get("Date_Received", ""),
-                    "Μήνας / Έτος": f"{row.get('Calc_Month', '-')} / {row.get('Calc_Year', '-')}",
-                    "Μίσθωση / Ενοικιαστής": l_opts_all.get(str(row.get("Lease_ID", "")), "Διαγραμμένη Μίσθωση"),
-                    "Είδος": cat_display,
-                    "Ποσό": f"{amt_val:.2f} €".replace('.', ','),
-                    "Κατάσταση": "✅ Εξοφλήθηκε" if str(row.get("Status", "")) == "Εξοφλήθηκε" else "⚠️ Εκκρεμεί",
-                    "Μέθοδος": row.get("Bank_Account", "")
-                })
-            pay_list_data.reverse()
-            st.dataframe(pd.DataFrame(pay_list_data), use_container_width=True, hide_index=True)
+        # ΚΑΤΑΣΤΑΣΗ Α: ΦΟΡΜΑ ΝΕΑΣ ΕΙΣΠΡΑΞΗΣ
+        if st.session_state.pay_list_action == 'new':
+            st.markdown("### ➕ Προσθήκη Νέας Είσπραξης / Οφειλής")
+            col_b, _ = st.columns([1, 4])
+            if col_b.button("⬅️ Επιστροφή", key="back_pay_new", use_container_width=True):
+                st.session_state.pay_list_action = None
+                st.rerun()
 
-    # =========================================================================
-    # --- 3. ΕΠΕΞΕΡΓΑΣΙΑ (ΓΕΝΙΚΗ) ---
-    # =========================================================================
-    with tab_edit:
-        if payments_df.empty: st.warning("Δεν υπάρχουν πληρωμές.")
-        else:
-            p_edit_opts = {str(r.get("Payment_ID", "")): f"{str(r.get('Date_Received', ''))} | {str(r.get('Payment_Type', ''))} {str(r.get('Amount', ''))}€ ({str(r.get('Status', 'Εξοφλήθηκε'))})" for _, r in payments_df.iterrows()}
-            selected_pay_edit = st.selectbox("Επιλέξτε Καταχώρηση προς Επεξεργασία", options=list(p_edit_opts.keys()), format_func=lambda x: p_edit_opts[x])
-            
-            if selected_pay_edit:
-                sel_pay = payments_df[payments_df["Payment_ID"] == selected_pay_edit].iloc[0]
-                
+            with st.form("new_global_payment_form", clear_on_submit=True):
                 l_keys = list(l_opts_all.keys())
-                try: l_idx = l_keys.index(str(sel_pay.get("Lease_ID", "")))
-                except: l_idx = 0
-                try: pay_date = datetime.strptime(str(sel_pay.get("Date_Received", "")), "%Y-%m-%d").date()
-                except: pay_date = date.today()
+                sel_l = st.selectbox("Μίσθωση / Ακίνητο *", options=l_keys, format_func=lambda x: l_opts_all.get(x, x))
+                
+                c1, c2, c3 = st.columns(3)
+                with c1: p_type = st.selectbox("Είδος *", ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"])
+                with c2: p_amt = st.text_input("Ποσό (€) *", value="0")
+                with c3: p_status = st.selectbox("Κατάσταση *", ["Εξοφλήθηκε", "Εκκρεμεί"])
+                
+                p_desc = st.text_input("Περιγραφή (προαιρετικό)", placeholder="π.χ. Μερική πληρωμή, έκτακτο")
+                
+                c4, c5 = st.columns(2)
+                with c4: p_date = st.date_input("Ημερομηνία *", value=date.today())
+                bank_opts = ["Εθνική Τράπεζα", "Eurobank", "Alpha Bank", "Τράπεζα Πειραιώς", "Μετρητά", "Άλλο", "Εκκρεμεί"]
+                with c5: p_bank = st.selectbox("Τράπεζα / Τρόπος", bank_opts, index=0 if p_status == "Εξοφλήθηκε" else 6)
+                
+                c6, c7 = st.columns(2)
+                with c6: for_m = st.selectbox("Για Μήνα", list(range(1, 13)), index=datetime.today().month - 1)
+                with c7: for_y = st.selectbox("Για Έτος", [datetime.today().year - 1, datetime.today().year, datetime.today().year + 1], index=1)
+                
+                if st.form_submit_button("Αποθήκευση Είσπραξης", type="primary", use_container_width=True):
+                    amt_val = pd.to_numeric(p_amt.replace(',', '.'), errors='coerce')
+                    if pd.isna(amt_val) or amt_val <= 0:
+                        st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
+                    else:
+                        try:
+                            pay_id = f"PAY-{uuid.uuid4().hex[:6].upper()}"
+                            gsheets_service.add_payment([pay_id, sel_l, p_type, p_amt, p_date.strftime("%Y-%m-%d"), p_bank, str(for_m), str(for_y), p_status, p_desc])
+                            st.success("Η είσπραξη καταχωρήθηκε επιτυχώς!")
+                            time.sleep(1.5)
+                            st.session_state.pay_list_action = None
+                            st.rerun()
+                        except Exception as e: st.error(f"Σφάλμα: {e}")
 
-                type_opts, curr_type = ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"], str(sel_pay.get("Payment_Type", ""))
-                e_type_global = st.selectbox("Είδος Οφειλής *", type_opts, index=type_opts.index(curr_type) if curr_type in type_opts else 0)
+        # ΚΑΤΑΣΤΑΣΗ Β: ΦΟΡΜΑ ΕΠΕΞΕΡΓΑΣΙΑΣ
+        elif st.session_state.pay_list_action == 'edit':
+            st.markdown("### ✏️ Επεξεργασία Είσπραξης / Οφειλής")
+            col_b, _ = st.columns([1, 4])
+            if col_b.button("⬅️ Επιστροφή", key="back_pay_edit", use_container_width=True):
+                st.session_state.pay_list_action = None
+                st.rerun()
 
-                with st.form("edit_pay_form_global"):
-                    e_lease = st.selectbox("Μίσθωση *", options=l_keys, index=l_idx, format_func=lambda x: l_opts_all.get(x, x))
+            sel_pid = st.session_state.action_pay_list_id
+            sel_pay = payments_df[payments_df["Payment_ID"] == sel_pid].iloc[0]
+            
+            l_keys = list(l_opts_all.keys())
+            try: l_idx = l_keys.index(str(sel_pay.get("Lease_ID", "")))
+            except: l_idx = 0
+            
+            try: pay_date = datetime.strptime(str(sel_pay.get("Date_Received", "")), "%Y-%m-%d").date()
+            except: pay_date = date.today()
+
+            with st.form("edit_global_payment_form"):
+                e_lease = st.selectbox("Μίσθωση / Ακίνητο *", options=l_keys, index=l_idx, format_func=lambda x: l_opts_all.get(x, x))
+                
+                type_opts = ["Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"]
+                curr_type = str(sel_pay.get("Payment_Type", ""))
+                
+                c1, c2, c3 = st.columns(3)
+                with c1: e_type = st.selectbox("Είδος *", type_opts, index=type_opts.index(curr_type) if curr_type in type_opts else 0)
+                with c2: e_amt = st.text_input("Ποσό (€) *", value=str(sel_pay.get("Amount", "")).replace('.', ','))
+                curr_status = str(sel_pay.get("Status", "Εξοφλήθηκε"))
+                with c3: e_status = st.selectbox("Κατάσταση *", ["Εξοφλήθηκε", "Εκκρεμεί"], index=0 if curr_status == "Εξοφλήθηκε" else 1)
+                
+                e_desc = st.text_input("Περιγραφή (προαιρετικό)", value=str(sel_pay.get("Description", "")).replace('nan',''))
+                
+                c4, c5 = st.columns(2)
+                with c4: e_date = st.date_input("Ημερομηνία *", value=pay_date)
+                bank_opts = ["Εθνική Τράπεζα", "Eurobank", "Alpha Bank", "Τράπεζα Πειραιώς", "Μετρητά", "Άλλο", "Εκκρεμεί"]
+                curr_bank = str(sel_pay.get("Bank_Account", ""))
+                with c5: e_bank = st.selectbox("Τράπεζα / Τρόπος", bank_opts, index=bank_opts.index(curr_bank) if curr_bank in bank_opts else 0)
+                
+                c6, c7 = st.columns(2)
+                try: m_idx_val = int(str(sel_pay.get("Calc_Month", "1")).split('.')[0]) - 1
+                except: m_idx_val = 0
+                with c6: e_for_m = st.selectbox("Για Μήνα", list(range(1, 13)), index=max(0, min(11, m_idx_val)))
+                
+                try: curr_y_val = int(str(sel_pay.get("Calc_Year", datetime.today().year)).split('.')[0])
+                except: curr_y_val = datetime.today().year
+                y_options = [curr_y_val - 2, curr_y_val - 1, curr_y_val, curr_y_val + 1]
+                with c7: e_for_y = st.selectbox("Για Έτος", y_options, index=y_options.index(curr_y_val))
+
+                upd_p_btn = st.form_submit_button("Αποθήκευση Αλλαγών", type="primary", use_container_width=True)
+
+            if st.button("🗑️ Οριστική Διαγραφή Είσπραξης", use_container_width=True):
+                try:
+                    gsheets_service.delete_payment(sel_pid)
+                    st.success("Διαγράφηκε επιτυχώς!")
+                    time.sleep(1.5)
+                    st.session_state.pay_list_action = None
+                    st.rerun()
+                except Exception as e: st.error(f"Σφάλμα: {e}")
+
+            if upd_p_btn:
+                amt_val = pd.to_numeric(e_amt.replace(',', '.'), errors='coerce')
+                if pd.isna(amt_val) or amt_val <= 0:
+                    st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
+                else:
+                    try:
+                        new_row = [sel_pid, e_lease, e_type, e_amt, e_date.strftime("%Y-%m-%d"), e_bank, str(e_for_m), str(e_for_y), e_status, e_desc]
+                        gsheets_service.update_payment(sel_pid, new_row)
+                        st.success("Οι αλλαγές αποθηκεύτηκαν!")
+                        time.sleep(1.5)
+                        st.session_state.pay_list_action = None
+                        st.rerun()
+                    except Exception as e: st.error(f"Σφάλμα: {e}")
+
+        # ΚΑΤΑΣΤΑΣΗ Γ: ΛΙΣΤΑ ΜΕ ΦΙΛΤΡΑ & ΠΑΓΩΜΕΝΕΣ ΣΤΗΛΕΣ
+        else:
+            st.subheader("Ιστορικό Εισπράξεων & Οφειλών")
+            
+            if payments_df.empty: 
+                st.info("Δεν έχουν καταγραφεί εισπράξεις.")
+            else:
+                fc1, fc2 = st.columns(2)
+                
+                # Φίλτρο Έτους
+                all_years = set()
+                for _, r in payments_df.iterrows():
+                    y_val = str(r.get("Calc_Year", "")).strip()
+                    if y_val and y_val != "0": all_years.add(y_val)
+                sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
+                sel_year = fc1.selectbox("Επιλογή Έτους", sorted_years)
+
+                # Φίλτρο Είδους
+                all_types = ["Όλα τα είδη", "Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"]
+                sel_type = fc2.selectbox("Είδος", all_types)
+                
+                st.write("") 
+
+                pay_list_data = []
+                for _, row in payments_df.iterrows():
+                    p_type = str(row.get("Payment_Type", ""))
+                    if sel_type != "Όλα τα είδη" and p_type != sel_type: continue
                     
-                    ec1, ec2 = st.columns(2)
-                    with ec1: e_amount = st.text_input("Ποσό (€) *", value=str(sel_pay.get("Amount", "")).replace('.', ','))
-                    curr_status = str(sel_pay.get("Status", "Εξοφλήθηκε"))
-                    with ec2: e_status = st.selectbox("Κατάσταση", ["Εκκρεμεί", "Εξοφλήθηκε"], index=0 if curr_status == "Εκκρεμεί" else 1)
+                    row_y = str(row.get("Calc_Year", "")).strip()
+                    if sel_year != "Όλα τα έτη" and row_y != sel_year: continue
+
+                    amt_val = pd.to_numeric(str(row.get('Amount', '0')).replace(',', '.'), errors='coerce')
+                    if pd.isna(amt_val): amt_val = 0.0
                     
-                    e_desc_global = st.text_input("Περιγραφή (προαιρετικό)", value=str(sel_pay.get("Description", "")).replace('nan',''))
+                    d_text = str(row.get("Description", "")).replace('nan','')
+                    cat_display = f"{p_type}<br><span style='font-size: 11px; color: #555;'>({d_text})</span>" if d_text else p_type
                     
-                    ec4, ec5 = st.columns(2)
-                    bank_opts, curr_bank = ["Εθνική Τράπεζα", "Eurobank", "Alpha Bank", "Τράπεζα Πειραιώς", "Μετρητά", "Άλλο"], str(sel_pay.get("Bank_Account", ""))
-                    with ec4: e_date_rec = st.date_input("Ημερομηνία *", value=pay_date)
-                    with ec5: e_bank = st.selectbox("Τράπεζα / Τρόπος", bank_opts, index=bank_opts.index(curr_bank) if curr_bank in bank_opts else 0)
-                    
-                    if st.form_submit_button("Αποθήκευση Αλλαγών", type="primary"):
-                        amt_val = pd.to_numeric(e_amount.replace(',', '.'), errors='coerce')
-                        if pd.isna(amt_val): amt_val = 0.0
-                        if e_lease and amt_val > 0:
-                            try:
-                                gsheets_service.update_payment(selected_pay_edit, [selected_pay_edit, e_lease, e_type_global, e_amount, e_date_rec.strftime("%Y-%m-%d"), e_bank, str(sel_pay.get('For_Month', '')), str(sel_pay.get('For_Year', '')), e_status, e_desc_global])
-                                st.success("Οι αλλαγές αποθηκεύτηκαν! Ανανεώστε τη σελίδα.")
-                            except Exception as e: st.error(f"Σφάλμα: {e}")
-                        else: st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
+                    pay_list_data.append({
+                        "Payment_ID": str(row.get("Payment_ID", "")),
+                        "Ημερομηνία": str(row.get("Date_Received", "")),
+                        "Μήνας / Έτος": f"{row.get('Calc_Month', '-')} / {row.get('Calc_Year', '-')}",
+                        "Μίσθωση / Ακίνητο": l_opts_all.get(str(row.get("Lease_ID", "")), "Διαγραμμένη Μίσθωση"),
+                        "Είδος": cat_display,
+                        "Ποσό": f"{amt_val:.2f} €".replace('.', ','),
+                        "Κατάσταση": "✅ Εξοφλήθηκε" if str(row.get("Status", "")) == "Εξοφλήθηκε" else "⚠️ Εκκρεμεί",
+                        "Μέθοδος": str(row.get("Bank_Account", ""))
+                    })
+                
+                if not pay_list_data:
+                    st.info("Δεν βρέθηκαν εγγραφές με τα επιλεγμένα κριτήρια.")
+                else:
+                    html_code = f"""
+                    <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
+                    <div class="table-container">
+                        <table id="pay-table" class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortTable('pay-table', 0)">Ημερομηνία ⇕</th>
+                                    <th onclick="sortTable('pay-table', 1)">Μήνας / Έτος ⇕</th>
+                                    <th onclick="sortTable('pay-table', 2)">Μίσθωση / Ακίνητο ⇕</th>
+                                    <th onclick="sortTable('pay-table', 3)">Είδος ⇕</th>
+                                    <th onclick="sortTable('pay-table', 4)">Ποσό ⇕</th>
+                                    <th onclick="sortTable('pay-table', 5)">Κατάσταση ⇕</th>
+                                    <th onclick="sortTable('pay-table', 6)">Μέθοδος ⇕</th>
+                                    <th>Ενέργεια</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    """
+                    for item in pay_list_data[::-1]:
+                        html_code += f"""
+                                <tr>
+                                    <td>{item['Ημερομηνία']}</td>
+                                    <td>{item['Μήνας / Έτος']}</td>
+                                    <td>{item['Μίσθωση / Ακίνητο']}</td>
+                                    <td>{item['Είδος']}</td>
+                                    <td><strong>{item['Ποσό']}</strong></td>
+                                    <td>{item['Κατάσταση']}</td>
+                                    <td>{item['Μέθοδος']}</td>
+                                    <td><button class="action-btn" onclick="triggerPython('EDIT_{item['Payment_ID']}', 'hidden_pay_list')">✏️ Επεξ.</button></td>
+                                </tr>
+                        """
+                    html_code += f"""
+                            </tbody>
+                        </table>
+                    </div>
+                    {COMMON_JS}
+                    </body></html>
+                    """
+                    components.html(html_code, height=580, scrolling=False)
+
+            st.write("")
+            if st.button("➕ Προσθήκη Νέας Είσπραξης", type="primary", use_container_width=True):
+                st.session_state.pay_list_action = 'new'
+                st.rerun()
