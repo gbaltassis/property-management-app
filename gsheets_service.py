@@ -89,3 +89,15 @@ def update_payment(id, row): update_row_by_id("Payments", id, row, fetch_all_pay
 def delete_payment(id): delete_row_by_id("Payments", id, fetch_all_payments)
 def update_expense(id, row): update_row_by_id("Expenses", id, row, fetch_all_expenses)
 def delete_expense(id): delete_row_by_id("Expenses", id, fetch_all_expenses)
+
+def fetch_all_insurances():
+    return get_dataframe('Insurances')
+
+def add_insurance(row_data):
+    append_row('Insurances', row_data)
+
+def update_insurance(ins_id, row_data):
+    update_row('Insurances', 'Insurance_ID', ins_id, row_data)
+
+def delete_insurance(ins_id):
+    delete_row('Insurances', 'Insurance_ID', ins_id)
