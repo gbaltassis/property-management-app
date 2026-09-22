@@ -103,7 +103,7 @@ def show():
                 cat = str(r.get("Category", ""))
                 target = str(r.get("AFM", "")) if cat == "ΕΝΦΙΑ" else prop_options.get(str(r.get("Property_ID", "")), "-")
                 
-               details = str(r.get("Description", "")).replace('nan', '')
+                details = str(r.get("Description", "")).replace('nan', '')
                 if "Ασφάλιση" in cat:
                     ins_comp = str(r.get('Insurance_Company', '')).replace('nan', '')
                     contract = str(r.get('Contract_Number', '')).replace('nan', '')
@@ -140,7 +140,6 @@ def show():
                     if contract: extra_info = f" | Αρ. Συμβ: {contract}"
                 elif cat_val in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
                     desc = str(r.get("Description", "")).replace('nan', '')
-                    # Κόβουμε την περιγραφή στους 40 χαρακτήρες για να μη χαλάσει το πλάτος της λίστας
                     if desc: extra_info = f" | {desc[:40] + '...' if len(desc) > 40 else desc}"
                 
                 e_opts[exp_id_val] = f"{date_paid_val} | {cat_val} | {target_val}{extra_info}"
