@@ -94,11 +94,10 @@ def show():
     with col1:
         current_year = datetime.today().year
         year_opts = list(range(current_year - 2, current_year + 3))
-        selected_year = st.selectbox("Επιλογή Έτους", year_opts, index=year_opts.index(current_year))
+        selected_year = st.selectbox("Επιλογή Έτους", year_opts, index=year_opts.index(current_year), key="rep_year_filter")
     with col2:
         afm_opts = list(owners_dict.keys())
-        selected_afm = st.selectbox("Επιλογή Ιδιοκτήτη (ΑΦΜ)", afm_opts, format_func=lambda x: f"{x} - {owners_dict[x]}")
-
+        selected_afm = st.selectbox("Επιλογή Ιδιοκτήτη (ΑΦΜ)", afm_opts, format_func=lambda x: f"{x} - {owners_dict[x]}", key="rep_afm_filter")
     st.markdown("---")
 
     owner_props = []
