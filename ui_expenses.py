@@ -9,7 +9,6 @@ import streamlit.components.v1 as components
 
 COMMON_CSS = """
 <style>
-    /* CSS ΓΙΑ ΠΑΓΩΜΕΝΕΣ ΕΠΙΚΕΦΑΛΙΔΕΣ ΚΑΙ ΠΡΩΤΗ ΣΤΗΛΗ ΣΕ HTML ΠΙΝΑΚΕΣ */
     html, body { font-family: sans-serif; }
     .table-container {
         height: 550px;
@@ -24,7 +23,14 @@ COMMON_CSS = """
     .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: top; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
     .custom-table th:hover { background-color: #e2e6ea; }
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 100px; }
+    
+    /* ΑΛΛΑΓΗ ΓΙΑ ΚΙΝΗΤΑ: Μικρότερο πλάτος και αναδίπλωση στην 1η στήλη */
+    .custom-table th:first-child, .custom-table td:first-child { 
+        position: sticky; left: 0; z-index: 3; background-color: #ffffff; 
+        box-shadow: 1px 0 0 #ddd; font-weight: 600; 
+        min-width: 120px; max-width: 150px; 
+        white-space: normal !important; word-wrap: break-word; 
+    }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     
     .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 12px; font-weight: bold; transition: 0.2s; }
@@ -149,9 +155,6 @@ def show():
 
     st.header("Διαχείριση Εξόδων & Ζημιών")
 
-    # =========================================================================
-    # ΚΑΤΑΣΤΑΣΗ 1: ΝΕΟ ΕΞΟΔΟ (ΦΟΡΜΑ)
-    # =========================================================================
     if st.session_state.expense_action == 'new':
         st.markdown("### ➕ Προσθήκη Νέου Εξόδου")
         col_back, _ = st.columns([1, 4])
@@ -250,9 +253,6 @@ def show():
                         st.rerun()
                     except Exception as e: st.error(f"Σφάλμα: {e}")
 
-    # =========================================================================
-    # ΚΑΤΑΣΤΑΣΗ 2: ΕΠΕΞΕΡΓΑΣΙΑ (ΦΟΡΜΑ)
-    # =========================================================================
     elif st.session_state.expense_action == 'edit':
         st.markdown("### ✏️ Επεξεργασία Εγγραφής")
         col_back, _ = st.columns([1, 4])
@@ -382,9 +382,6 @@ def show():
                     st.rerun()
                 except Exception as e: st.error(f"Σφάλμα επεξεργασίας: {e}")
 
-    # =========================================================================
-    # ΚΑΤΑΣΤΑΣΗ 3: ΙΣΤΟΡΙΚΟ (ΚΕΝΤΡΙΚΗ ΟΘΟΝΗ ΜΕ ΦΙΛΤΡΑ)
-    # =========================================================================
     else:
         st.caption("Ιστορικό Εξόδων & Ζημιών")
         if expenses_df.empty: 
@@ -399,11 +396,9 @@ def show():
                     all_years.add(str(d.year))
                 except: pass
             sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
-            # PROSTHIKI KEY
             sel_year = fc1.selectbox("Επιλογή Έτους", sorted_years, key="filter_exp_year")
 
             all_cats = ["Όλες οι κατηγορίες", "ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
-            # PROSTHIKI KEY
             sel_cat = fc2.selectbox("Κατηγορία", all_cats, key="filter_exp_cat")
             
             st.write("") 
@@ -438,9 +433,9 @@ def show():
                 
                 exp_list.append({
                     "Expense_ID": str(r.get("Expense_ID", "")),
+                    "Αφορά": target,
                     "Ημερομηνία": raw_date,
                     "Κατηγορία": cat,
-                    "Αφορά": target,
                     "Ποσό": f"{amt:.2f} €".replace('.', ','),
                     "Λεπτομέρειες": details
                 })
@@ -454,9 +449,9 @@ def show():
                     <table id="exp-table" class="custom-table">
                         <thead>
                             <tr>
-                                <th onclick="sortTable('exp-table', 0)">Ημερομηνία ⇕</th>
-                                <th onclick="sortTable('exp-table', 1)">Κατηγορία ⇕</th>
-                                <th onclick="sortTable('exp-table', 2)">Αφορά ⇕</th>
+                                <th onclick="sortTable('exp-table', 0)">Αφορά (Ακίνητο/ΑΦΜ) ⇕</th>
+                                <th onclick="sortTable('exp-table', 1)">Ημερομηνία ⇕</th>
+                                <th onclick="sortTable('exp-table', 2)">Κατηγορία ⇕</th>
                                 <th onclick="sortTable('exp-table', 3)">Ποσό ⇕</th>
                                 <th onclick="sortTable('exp-table', 4)">Λεπτομέρειες ⇕</th>
                                 <th>Ενέργεια</th>
@@ -467,9 +462,9 @@ def show():
                 for item in exp_list[::-1]:
                     html_code += f"""
                             <tr>
+                                <td>{item['Αφορά']}</td>
                                 <td>{item['Ημερομηνία']}</td>
                                 <td>{item['Κατηγορία']}</td>
-                                <td>{item['Αφορά']}</td>
                                 <td><strong>{item['Ποσό']}</strong></td>
                                 <td>{item['Λεπτομέρειες']}</td>
                                 <td><button class="action-btn" onclick="triggerPython('EDIT_{item['Expense_ID']}')">✏️ Επεξ.</button></td>
