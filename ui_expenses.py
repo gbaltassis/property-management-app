@@ -119,7 +119,16 @@ def show():
     with tab_edit:
         if expenses_df.empty: st.warning("Δεν υπάρχουν έξοδα.")
         else:
-            e_opts = {str(r.get("Expense_ID", "")): f"{r.get('Date_Paid', '')} | {r.get('Category', '')} {r.get('Amount', '')}€" for _, r in expenses_df.iterrows()}
+           e_opts = {}
+            for _, r in expenses_df.iterrows():
+                exp_id = str(r.get("Expense_ID", ""))
+                cat = str(r.get("Category", ""))
+                date_paid = str(r.get("Date_Paid", ""))
+                
+                # Έλεγχος: Αν είναι ΕΝΦΙΑ δείχνει το ΑΦΜ (Ιδιοκτήτη), αλλιώς δείχνει το Ακίνητο
+                target = str(r.get("AFM", "")) if cat == "ΕΝΦΙΑ" else prop_options.get(str(r.get("Property_ID", "")), "-")
+                
+                e_opts[exp_id] = f"{date_paid} | {cat} | {target}"
             sel_exp = st.selectbox("Επιλέξτε Έξοδο προς επεξεργασία", options=list(e_opts.keys()), format_func=lambda x: e_opts[x])
             
             if sel_exp:
