@@ -22,7 +22,8 @@ COMMON_CSS = """
     }
     .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 900px; }
     .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: top; }
-    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; }
+    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
+    .custom-table th:hover { background-color: #e2e6ea; }
     .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 100px; }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     
@@ -33,6 +34,7 @@ COMMON_CSS = """
         .table-container { border-color: #444; }
         .custom-table { background: #0e1117; color: white; }
         .custom-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
+        .custom-table th:hover { background-color: #383a45; }
         .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
         .custom-table td { border-color: #444; }
@@ -42,15 +44,88 @@ COMMON_CSS = """
 </style>
 """
 
+COMMON_JS = """
+<script>
+    function sortTable(tableId, n) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById(tableId);
+        switching = true;
+        dir = "asc"; 
+        while (switching) {
+            switching = false;
+            rows = table.getElementsByTagName("TR");
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                if(!x || !y) continue;
+                
+                let valX = x.innerText.trim().toLowerCase();
+                let valY = y.innerText.trim().toLowerCase();
+                
+                if(valX.includes('€')) valX = parseFloat(valX.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                if(valY.includes('€')) valY = parseFloat(valY.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                
+                if(valX.match(/^\\d{4}-\\d{2}-\\d{2}/)) valX = new Date(valX).getTime();
+                if(valY.match(/^\\d{4}-\\d{2}-\\d{2}/)) valY = new Date(valY).getTime();
+                
+                if (dir == "asc") {
+                    if (valX > valY) { shouldSwitch = true; break; }
+                } else if (dir == "desc") {
+                    if (valX < valY) { shouldSwitch = true; break; }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount ++;      
+            } else {
+                if (switchcount == 0 && dir == "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+    }
+
+    (function hideInput() {
+        var pDoc = window.parent.document;
+        var inputs = pDoc.querySelectorAll('input[aria-label="hidden_exp_click"]');
+        if (inputs.length > 0) {
+            inputs.forEach(function(input) {
+                var wrapper = input.closest('div[data-testid="stTextInput"]');
+                if (wrapper) { wrapper.style.position = 'absolute'; wrapper.style.opacity = '0'; wrapper.style.pointerEvents = 'none'; wrapper.style.height = '0px'; wrapper.style.overflow = 'hidden'; }
+            });
+        } else {
+            setTimeout(hideInput, 100);
+        }
+    })();
+
+    function triggerPython(action_val) {
+        var payload = action_val + '|' + Date.now();
+        var pDoc = window.parent.document;
+        var input = pDoc.querySelector('input[aria-label="hidden_exp_click"]');
+        if(input) {
+            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            nativeSetter.call(input, payload);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+        }
+    }
+</script>
+"""
+
 def handle_expense_action():
-    val = st.session_state.hidden_exp_click_val
+    # Επειδή το key του input είναι πλέον δυναμικό, το διαβάζουμε από το session_state με βάση το δυναμικό ID
+    key_name = st.session_state.current_exp_hidden_key
+    val = st.session_state.get(key_name, "")
     if val:
         parts = val.split('|')
         action = parts[0]
         if action.startswith("EDIT_"):
             st.session_state.expense_action = 'edit'
             st.session_state.action_exp_id = action.replace("EDIT_", "")
-        st.session_state.hidden_exp_click_val = ""
+        st.session_state[key_name] = ""
 
 def show():
     if "expense_action" not in st.session_state:
@@ -58,8 +133,11 @@ def show():
     if "action_exp_id" not in st.session_state:
         st.session_state.action_exp_id = None
 
-    st.text_input("hidden_exp_click", key="hidden_exp_click_val", label_visibility="collapsed", on_change=handle_expense_action)
-    
+    # Δημιουργία ΜΟΝΑΔΙΚΟΥ κλειδιού για να μην πετάξει ποτέ ξανά DuplicateElementKey!
+    if "current_exp_hidden_key" not in st.session_state:
+        st.session_state.current_exp_hidden_key = f"hidden_exp_click_val_{uuid.uuid4().hex[:8]}"
+
+    st.text_input("hidden_exp_click", key=st.session_state.current_exp_hidden_key, label_visibility="collapsed", on_change=handle_expense_action)
     st.markdown(COMMON_CSS, unsafe_allow_html=True)
     
     try:
@@ -79,6 +157,8 @@ def show():
                 if len(afm) == 8: afm = "0" + afm
                 name = f"{str(p.get(f'Name_{i}', '')).strip()} {str(p.get(f'Surname_{i}', '')).strip()}".strip()
                 if afm and afm != 'nan': owner_afms.add(f"{afm} - {name}")
+
+    st.header("Διαχείριση Εξόδων & Ζημιών")
 
     # =========================================================================
     # ΚΑΤΑΣΤΑΣΗ 1: ΝΕΟ ΕΞΟΔΟ (ΦΟΡΜΑ)
@@ -124,7 +204,7 @@ def show():
                     st.info("Δεν βρέθηκαν ακίνητα για αυτό το ΑΦΜ στο Μητρώο.")
                 else:
                     for pid, pchar in owned_props:
-                        val = st.text_input(f"Κύριος Φόρος: {pchar} (€)", value="0", key=f"new_enf_{pid}")
+                        val = st.text_input(f"Κύριος Φόρος: {pchar} (€)", value="0", key=f"new_enf_{pid}_{uuid.uuid4().hex[:4]}")
                         enfia_breakdown[pid] = val
                 
                 st.markdown("---")
@@ -157,7 +237,6 @@ def show():
                         if pd.isna(num): num = 0.0
                         clean_dict[pid] = num
                         total_main += num
-                    
                     s_val = pd.to_numeric(enfia_sur.replace(',', '.'), errors='coerce')
                     if pd.isna(s_val): s_val = 0.0
                     amt_val = total_main + s_val
@@ -171,7 +250,7 @@ def show():
                 else:
                     exp_id = f"EXP-{uuid.uuid4().hex[:6].upper()}"
                     final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
-                    r_date_str = "" # Το πεδίο παραμένει κενό για να μη χαλάσει η δομή του Google Sheet
+                    r_date_str = ""
                     
                     row = [exp_id, category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num, detailed_desc, enfia_breakdown_str, enfia_sur]
                     try:
@@ -198,11 +277,11 @@ def show():
         cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
         curr_cat = str(sel_row.get("Category", "")).strip()
         
-        if f"edit_exp_cat_state" not in st.session_state or st.session_state.get("last_sel_exp") != sel_exp:
-            st.session_state["edit_exp_cat_state"] = curr_cat
+        if f"edit_exp_cat_state_{sel_exp}" not in st.session_state or st.session_state.get("last_sel_exp") != sel_exp:
+            st.session_state[f"edit_exp_cat_state_{sel_exp}"] = curr_cat
             st.session_state["last_sel_exp"] = sel_exp
 
-        e_category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, key="edit_exp_cat_state")
+        e_category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, key=f"edit_exp_cat_state_{sel_exp}")
         st.markdown("---")
         
         with st.form("edit_expense_form"):
@@ -304,8 +383,7 @@ def show():
                 st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
             else:
                 final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
-                r_date_str = "" # Το πεδίο παραμένει κενό για να μη χαλάσει η δομή του Google Sheet
-                
+                r_date_str = "" 
                 new_row = [sel_exp, e_category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num, detailed_desc, enfia_breakdown_str, enfia_sur]
                 try:
                     gsheets_service.update_expense(sel_exp, new_row)
@@ -319,8 +397,7 @@ def show():
     # ΚΑΤΑΣΤΑΣΗ 3: ΙΣΤΟΡΙΚΟ (ΚΕΝΤΡΙΚΗ ΟΘΟΝΗ ΜΕ ΦΙΛΤΡΑ)
     # =========================================================================
     else:
-        st.subheader("Ιστορικό Εξόδων")
-        
+        st.caption("Ιστορικό Εξόδων & Ζημιών")
         if expenses_df.empty: 
             st.info("Δεν έχουν καταγραφεί έξοδα.")
         else:
@@ -381,19 +458,16 @@ def show():
                 st.info("Δεν βρέθηκαν εγγραφές με τα επιλεγμένα κριτήρια.")
             else:
                 html_code = f"""
-                <!DOCTYPE html>
-                <html>
-                <head><style>{COMMON_CSS}</style></head>
-                <body>
+                <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
                 <div class="table-container">
-                    <table class="custom-table">
+                    <table id="exp-table" class="custom-table">
                         <thead>
                             <tr>
-                                <th>Ημερομηνία</th>
-                                <th>Κατηγορία</th>
-                                <th>Αφορά</th>
-                                <th>Ποσό</th>
-                                <th>Λεπτομέρειες</th>
+                                <th onclick="sortTable('exp-table', 0)">Ημερομηνία ⇕</th>
+                                <th onclick="sortTable('exp-table', 1)">Κατηγορία ⇕</th>
+                                <th onclick="sortTable('exp-table', 2)">Αφορά ⇕</th>
+                                <th onclick="sortTable('exp-table', 3)">Ποσό ⇕</th>
+                                <th onclick="sortTable('exp-table', 4)">Λεπτομέρειες ⇕</th>
                                 <th>Ενέργεια</th>
                             </tr>
                         </thead>
@@ -410,38 +484,12 @@ def show():
                                 <td><button class="action-btn" onclick="triggerPython('EDIT_{item['Expense_ID']}')">✏️ Επεξ.</button></td>
                             </tr>
                     """
-                html_code += """
+                html_code += f"""
                         </tbody>
                     </table>
                 </div>
-                <script>
-                    (function hideInput() {
-                        var pDoc = window.parent.document;
-                        var inputs = pDoc.querySelectorAll('input[aria-label="hidden_exp_click"]');
-                        if (inputs.length > 0) {
-                            inputs.forEach(function(input) {
-                                var wrapper = input.closest('div[data-testid="stTextInput"]');
-                                if (wrapper) { wrapper.style.position = 'absolute'; wrapper.style.opacity = '0'; wrapper.style.pointerEvents = 'none'; wrapper.style.height = '0px'; wrapper.style.overflow = 'hidden'; }
-                            });
-                        } else {
-                            setTimeout(hideInput, 100);
-                        }
-                    })();
-
-                    function triggerPython(action_val) {
-                        var payload = action_val + '|' + Date.now();
-                        var pDoc = window.parent.document;
-                        var input = pDoc.querySelector('input[aria-label="hidden_exp_click"]');
-                        if(input) {
-                            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                            nativeSetter.call(input, payload);
-                            input.dispatchEvent(new Event('input', {bubbles: true}));
-                            input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-                        }
-                    }
-                </script>
-                </body>
-                </html>
+                {COMMON_JS}
+                </body></html>
                 """
                 t_height = min(600, 150 + len(exp_list) * 55)
                 components.html(html_code, height=t_height, scrolling=False)
