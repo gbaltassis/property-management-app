@@ -59,16 +59,12 @@ COMMON_JS = """
                 x = rows[i].getElementsByTagName("TD")[n];
                 y = rows[i + 1].getElementsByTagName("TD")[n];
                 if(!x || !y) continue;
-                
                 let valX = x.innerText.trim().toLowerCase();
                 let valY = y.innerText.trim().toLowerCase();
-                
                 if(valX.includes('€')) valX = parseFloat(valX.replace(/[^0-9,-]/g, '').replace(',', '.'));
                 if(valY.includes('€')) valY = parseFloat(valY.replace(/[^0-9,-]/g, '').replace(',', '.'));
-                
                 if(valX.match(/^\\d{4}-\\d{2}-\\d{2}/)) valX = new Date(valX).getTime();
                 if(valY.match(/^\\d{4}-\\d{2}-\\d{2}/)) valY = new Date(valY).getTime();
-                
                 if (dir == "asc") {
                     if (valX > valY) { shouldSwitch = true; break; }
                 } else if (dir == "desc") {
@@ -80,10 +76,7 @@ COMMON_JS = """
                 switching = true;
                 switchcount ++;      
             } else {
-                if (switchcount == 0 && dir == "asc") {
-                    dir = "desc";
-                    switching = true;
-                }
+                if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
             }
         }
     }
@@ -96,9 +89,7 @@ COMMON_JS = """
                 var wrapper = input.closest('div[data-testid="stTextInput"]');
                 if (wrapper) { wrapper.style.position = 'absolute'; wrapper.style.opacity = '0'; wrapper.style.pointerEvents = 'none'; wrapper.style.height = '0px'; wrapper.style.overflow = 'hidden'; }
             });
-        } else {
-            setTimeout(hideInput, 100);
-        }
+        } else { setTimeout(hideInput, 100); }
     })();
 
     function triggerPython(action_val) {
@@ -116,7 +107,6 @@ COMMON_JS = """
 """
 
 def handle_expense_action():
-    # Επειδή το key του input είναι πλέον δυναμικό, το διαβάζουμε από το session_state με βάση το δυναμικό ID
     key_name = st.session_state.current_exp_hidden_key
     val = st.session_state.get(key_name, "")
     if val:
@@ -133,7 +123,6 @@ def show():
     if "action_exp_id" not in st.session_state:
         st.session_state.action_exp_id = None
 
-    # Δημιουργία ΜΟΝΑΔΙΚΟΥ κλειδιού για να μην πετάξει ποτέ ξανά DuplicateElementKey!
     if "current_exp_hidden_key" not in st.session_state:
         st.session_state.current_exp_hidden_key = f"hidden_exp_click_val_{uuid.uuid4().hex[:8]}"
 
@@ -166,20 +155,20 @@ def show():
     if st.session_state.expense_action == 'new':
         st.markdown("### ➕ Προσθήκη Νέου Εξόδου")
         col_back, _ = st.columns([1, 4])
-        if col_back.button("⬅️ Επιστροφή", use_container_width=True):
+        if col_back.button("⬅️ Επιστροφή", use_container_width=True, key="back_btn_exp_new"):
             st.session_state.expense_action = None
             st.rerun()
 
         cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
-        category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, key="new_exp_cat")
+        category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, key="new_exp_cat_sel")
         st.markdown("---")
         
         with st.form("new_expense_form", clear_on_submit=True):
             afm_sel, prop_sel = "", ""
             if category == "ΕΝΦΙΑ":
-                afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", list(owner_afms)) if owner_afms else st.text_input("ΑΦΜ Ιδιοκτήτη *")
+                afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", list(owner_afms), key="new_exp_afm_sel") if owner_afms else st.text_input("ΑΦΜ Ιδιοκτήτη *", key="new_exp_afm_txt")
             else:
-                prop_sel = st.selectbox("Ακίνητο *", list(prop_options.keys()), format_func=lambda x: prop_options[x]) if prop_options else ""
+                prop_sel = st.selectbox("Ακίνητο *", list(prop_options.keys()), format_func=lambda x: prop_options[x], key="new_exp_prop_sel") if prop_options else ""
 
             amount, enfia_sur = "0", "0"
             enfia_breakdown = {}
@@ -204,28 +193,28 @@ def show():
                     st.info("Δεν βρέθηκαν ακίνητα για αυτό το ΑΦΜ στο Μητρώο.")
                 else:
                     for pid, pchar in owned_props:
-                        val = st.text_input(f"Κύριος Φόρος: {pchar} (€)", value="0", key=f"new_enf_{pid}_{uuid.uuid4().hex[:4]}")
+                        val = st.text_input(f"Κύριος Φόρος: {pchar} (€)", value="0", key=f"new_enf_main_{pid}")
                         enfia_breakdown[pid] = val
                 
                 st.markdown("---")
-                enfia_sur = st.text_input("Συνολική Έκπτωση / Προσαύξηση (€)", value="0", help="Βάλε μείον (-) αν είναι έκπτωση")
-                date_paid = st.date_input("Ημ/νία Πληρωμής / Έκδοσης *", value=date.today())
+                enfia_sur = st.text_input("Συνολική Έκπτωση / Προσαύξηση (€)", value="0", help="Βάλε μείον (-) αν είναι έκπτωση", key="new_exp_enf_sur")
+                date_paid = st.date_input("Ημ/νία Πληρωμής / Έκδοσης *", value=date.today(), key="new_exp_enf_d")
             else:
                 ec1, ec2 = st.columns(2)
-                with ec1: amount = st.text_input("Ποσό (€) *", value="0")
-                with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=date.today())
+                with ec1: amount = st.text_input("Ποσό (€) *", value="0", key="new_exp_amt")
+                with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=date.today(), key="new_exp_d")
 
             desc, detailed_desc, ins_comp, contract_num, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
             
             if category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
-                desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *")
-                detailed_desc = st.text_area("Αναλυτική Περιγραφή (π.χ. Τι ακριβώς επισκευάστηκε)")
+                desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *", key="new_exp_desc")
+                detailed_desc = st.text_area("Αναλυτική Περιγραφή (π.χ. Τι ακριβώς επισκευάστηκε)", key="new_exp_det_desc")
             
             if "Ασφάλιση" in category:
                 sc1, sc2, sc3 = st.columns(3)
-                with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *")
-                with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου")
-                with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"])
+                with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *", key="new_exp_ins")
+                with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου", key="new_exp_cont")
+                with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"], key="new_exp_dur")
 
             if st.form_submit_button("Αποθήκευση Εξόδου", type="primary", use_container_width=True):
                 enfia_breakdown_str = "{}"
@@ -267,7 +256,7 @@ def show():
     elif st.session_state.expense_action == 'edit':
         st.markdown("### ✏️ Επεξεργασία Εγγραφής")
         col_back, _ = st.columns([1, 4])
-        if col_back.button("⬅️ Επιστροφή", use_container_width=True):
+        if col_back.button("⬅️ Επιστροφή", use_container_width=True, key="back_btn_exp_edit"):
             st.session_state.expense_action = None
             st.rerun()
 
@@ -292,13 +281,13 @@ def show():
                 afm_idx = 0
                 for i, a in enumerate(afm_opts):
                     if curr_afm in a: afm_idx = i
-                afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", afm_opts, index=afm_idx) if afm_opts else st.text_input("ΑΦΜ Ιδιοκτήτη *", value=curr_afm)
+                afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", afm_opts, index=afm_idx, key=f"e_afm_{sel_exp}") if afm_opts else st.text_input("ΑΦΜ Ιδιοκτήτη *", value=curr_afm, key=f"e_afmtxt_{sel_exp}")
             else:
                 curr_prop = str(sel_row.get("Property_ID", ""))
                 p_keys = list(prop_options.keys())
                 try: p_idx = p_keys.index(curr_prop)
                 except: p_idx = 0
-                prop_sel = st.selectbox("Ακίνητο *", p_keys, index=p_idx, format_func=lambda x: prop_options[x]) if p_keys else ""
+                prop_sel = st.selectbox("Ακίνητο *", p_keys, index=p_idx, format_func=lambda x: prop_options[x], key=f"e_prop_{sel_exp}") if p_keys else ""
 
             amount, enfia_sur = "0", "0"
             enfia_breakdown = {}
@@ -325,34 +314,34 @@ def show():
                                 
                 for pid, pchar in owned_props:
                     old_val = str(saved_breakdown.get(pid, "0")).replace('.', ',')
-                    val = st.text_input(f"Κύριος Φόρος: {pchar} (€)", value=old_val, key=f"edit_enf_{pid}_{sel_exp}")
+                    val = st.text_input(f"Κύριος Φόρος: {pchar} (€)", value=old_val, key=f"e_enf_{pid}_{sel_exp}")
                     enfia_breakdown[pid] = val
                     
                 st.markdown("---")
-                enfia_sur = st.text_input("Συνολική Έκπτωση / Προσαύξηση (€)", value=str(sel_row.get("ENFIA_Surcharge", "")).replace('.', ','))
-                date_paid = st.date_input("Ημ/νία Πληρωμής / Έκδοσης *", value=pay_date)
+                enfia_sur = st.text_input("Συνολική Έκπτωση / Προσαύξηση (€)", value=str(sel_row.get("ENFIA_Surcharge", "")).replace('.', ','), key=f"e_enf_sur_{sel_exp}")
+                date_paid = st.date_input("Ημ/νία Πληρωμής / Έκδοσης *", value=pay_date, key=f"e_enf_d_{sel_exp}")
             else:
                 ec1, ec2 = st.columns(2)
-                with ec1: amount = st.text_input("Ποσό (€) *", value=str(sel_row.get("Amount", "")).replace('.', ','))
-                with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=pay_date)
+                with ec1: amount = st.text_input("Ποσό (€) *", value=str(sel_row.get("Amount", "")).replace('.', ','), key=f"e_amt_{sel_exp}")
+                with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=pay_date, key=f"e_d_{sel_exp}")
 
             desc, detailed_desc, ins_comp, contract_num, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
             
             if e_category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
-                desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *", value=str(sel_row.get("Description", "")).replace('nan',''))
-                detailed_desc = st.text_area("Αναλυτική Περιγραφή", value=str(sel_row.get("Detailed_Description", "")).replace('nan',''))
+                desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *", value=str(sel_row.get("Description", "")).replace('nan',''), key=f"e_desc_{sel_exp}")
+                detailed_desc = st.text_area("Αναλυτική Περιγραφή", value=str(sel_row.get("Detailed_Description", "")).replace('nan',''), key=f"e_detdesc_{sel_exp}")
             
             if "Ασφάλιση" in e_category:
                 sc1, sc2, sc3 = st.columns(3)
-                with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *", value=str(sel_row.get("Insurance_Company", "")).replace('nan',''))
-                with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου", value=str(sel_row.get("Contract_Number", "")).replace('nan',''))
+                with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *", value=str(sel_row.get("Insurance_Company", "")).replace('nan',''), key=f"e_ins_{sel_exp}")
+                with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου", value=str(sel_row.get("Contract_Number", "")).replace('nan',''), key=f"e_cont_{sel_exp}")
                 dur_opts = ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"]
                 curr_dur = str(sel_row.get("Duration_Months", ""))
-                with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", dur_opts, index=dur_opts.index(curr_dur) if curr_dur in dur_opts else 0)
+                with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", dur_opts, index=dur_opts.index(curr_dur) if curr_dur in dur_opts else 0, key=f"e_dur_{sel_exp}")
 
             upd_btn = st.form_submit_button("Αποθήκευση Αλλαγών", type="primary", use_container_width=True)
             
-        if st.button("🗑️ Οριστική Διαγραφή Εξόδου", use_container_width=True):
+        if st.button("🗑️ Οριστική Διαγραφή Εξόδου", use_container_width=True, key=f"del_{sel_exp}"):
             try:
                 gsheets_service.delete_expense(sel_exp)
                 st.success("Διαγράφηκε! Η σελίδα ανανεώνεται...")
@@ -410,10 +399,12 @@ def show():
                     all_years.add(str(d.year))
                 except: pass
             sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
-            sel_year = fc1.selectbox("Επιλογή Έτους", sorted_years)
+            # PROSTHIKI KEY
+            sel_year = fc1.selectbox("Επιλογή Έτους", sorted_years, key="filter_exp_year")
 
             all_cats = ["Όλες οι κατηγορίες", "ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
-            sel_cat = fc2.selectbox("Κατηγορία", all_cats)
+            # PROSTHIKI KEY
+            sel_cat = fc2.selectbox("Κατηγορία", all_cats, key="filter_exp_cat")
             
             st.write("") 
 
@@ -495,6 +486,6 @@ def show():
                 components.html(html_code, height=t_height, scrolling=False)
 
         st.write("")
-        if st.button("➕ Προσθήκη Νέου Εξόδου", type="primary", use_container_width=True):
+        if st.button("➕ Προσθήκη Νέου Εξόδου", type="primary", use_container_width=True, key="btn_add_new_exp"):
             st.session_state.expense_action = 'new'
             st.rerun()
