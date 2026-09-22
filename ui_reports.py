@@ -3,6 +3,7 @@ import pandas as pd
 import gsheets_service
 from datetime import date, datetime
 import calendar
+import json
 
 COMMON_CSS = """
 <style>
@@ -14,13 +15,33 @@ COMMON_CSS = """
     .metric-sub { font-size: 12px; color: #adb5bd; margin-top: 5px; }
     .val-positive { color: #28a745 !important; }
     .val-negative { color: #dc3545 !important; }
-    .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 15px; }
-    .custom-table th { background-color: #e9ecef; padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; }
-    .custom-table td { padding: 10px; border-bottom: 1px solid #dee2e6; }
+    
+    /* CSS ΓΙΑ ΠΑΓΩΜΕΝΕΣ ΕΠΙΚΕΦΑΛΙΔΕΣ ΚΑΙ ΠΡΩΤΗ ΣΤΗΛΗ ΣΕ HTML ΠΙΝΑΚΕΣ */
+    .table-container {
+        max-height: 500px;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: sans-serif; font-size: 13px; background: white; min-width: 1000px; }
+    .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: right; vertical-align: top; }
+    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 #ddd; text-align: center;}
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 1; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 180px; text-align: left; }
+    .custom-table th:first-child { z-index: 3; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
+    
+    @media (prefers-color-scheme: dark) {
+        .table-container { border-color: #444; }
+        .custom-table { background: #0e1117; color: white; }
+        .custom-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
+        .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
+        .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
+        .custom-table td { border-color: #444; }
+    }
 </style>
 """
 
-# ΣΥΝΑΡΤΗΣΗ ΥΠΟΛΟΓΙΣΜΟΥ ΦΟΡΟΥ ΕΙΣΟΔΗΜΑΤΟΣ ΑΚΙΝΗΤΩΝ (Κλίμακα 15-25-35-45 με 5% έκπτωση)
 def calculate_property_tax(gross_income):
     if gross_income <= 0: return 0.0
     taxable = gross_income * 0.95
@@ -57,7 +78,6 @@ def show():
         st.info("Δεν υπάρχουν ακίνητα.")
         return
 
-    # Συγκέντρωση Ιδιοκτητών
     owners_dict = {}
     for _, p in props_df.iterrows():
         for i in range(1, 4):
@@ -70,7 +90,6 @@ def show():
         st.warning("Δεν βρέθηκαν καταχωρημένοι ιδιοκτήτες στα ακίνητα.")
         return
 
-    # Φίλτρα
     col1, col2 = st.columns(2)
     with col1:
         current_year = datetime.today().year
@@ -82,7 +101,6 @@ def show():
 
     st.markdown("---")
 
-    # --- ΒΗΜΑ 1: ΒΡΙΣΚΟΥΜΕ ΤΑ ΑΚΙΝΗΤΑ ΤΟΥ ΙΔΙΟΚΤΗΤΗ ---
     owner_props = []
     total_owner_prop_value = 0.0
     
@@ -99,9 +117,6 @@ def show():
             p_val = pd.to_numeric(str(p.get('Property_Value', '0')).replace(',', '.'), errors='coerce')
             if pd.isna(p_val): p_val = 0.0
             
-            main_enfia = pd.to_numeric(str(p.get('Main_ENFIA', '0')).replace(',', '.'), errors='coerce')
-            if pd.isna(main_enfia): main_enfia = 0.0
-            
             fixed_exp = pd.to_numeric(str(p.get('Fixed_Yearly_Expenses', '0')).replace(',', '.'), errors='coerce')
             if pd.isna(fixed_exp): fixed_exp = 0.0
             
@@ -113,7 +128,6 @@ def show():
                 "Name": str(p.get('Χαρακτηριστικό', '-')),
                 "Perc": ownership_perc / 100,
                 "Owner_Share_Value": owner_share_value,
-                "Main_ENFIA_100": main_enfia,
                 "Fixed_Exp_100": fixed_exp
             })
 
@@ -121,8 +135,9 @@ def show():
         st.info("Ο επιλεγμένος ιδιοκτήτης δεν έχει ποσοστό σε κανένα ακίνητο.")
         return
 
-    # --- ΒΗΜΑ 2: ΥΠΟΛΟΓΙΣΜΟΣ ΣΥΝΟΛΙΚΟΥ ΕΝΦΙΑ (ΠΡΟΣΑΥΞΗΣΗΣ) ---
     total_surcharge = 0.0
+    enfia_breakdown_year = {}
+    
     if not expenses_df.empty:
         enfia_rows = expenses_df[(expenses_df["Category"] == "ΕΝΦΙΑ") & (expenses_df["AFM"] == selected_afm)]
         for _, er in enfia_rows.iterrows():
@@ -131,8 +146,14 @@ def show():
             if d_paid.year == selected_year:
                 sur = pd.to_numeric(str(er.get("ENFIA_Surcharge", "0")).replace(',', '.'), errors='coerce')
                 if pd.notna(sur): total_surcharge += sur
+                
+                b_str = str(er.get("ENFIA_Breakdown", "{}")).replace('nan', '{}')
+                try: b_dict = json.loads(b_str)
+                except: b_dict = {}
+                
+                for k, v in b_dict.items():
+                    enfia_breakdown_year[k] = enfia_breakdown_year.get(k, 0.0) + v
 
-    # --- ΒΗΜΑ 3: ΥΠΟΛΟΓΙΣΜΟΙ ΑΝΑ ΑΚΙΝΗΤΟ (Εσοδα, Εξοδα) ---
     results = []
     total_exp_income, total_act_income = 0.0, 0.0
     
@@ -140,11 +161,9 @@ def show():
         pid = op["Property_ID"]
         perc = op["Perc"]
         
-        # 1. Θεωρητικό Έσοδο (Από Μισθώσεις)
         exp_income = 0.0
         prop_leases = leases_df[leases_df["Property_ID"] == pid] if not leases_df.empty else pd.DataFrame()
         for m in range(1, 13):
-            # Ελέγχουμε αν υπάρχει ενεργό συμβόλαιο αυτόν τον μήνα
             last_day = calendar.monthrange(selected_year, m)[1]
             month_end = date(selected_year, m, last_day)
             month_start = date(selected_year, m, 1)
@@ -158,9 +177,8 @@ def show():
                 if s_date <= month_end and e_date >= month_start:
                     rent = pd.to_numeric(str(l.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
                     if pd.notna(rent): exp_income += (rent * perc)
-                    break # Βρήκαμε συμβόλαιο, πάμε στον επόμενο μήνα
+                    break 
 
-        # 2. Πραγματικό Έσοδο (Από Εισπράξεις Ενοικίων)
         act_income = 0.0
         if not payments_df.empty and not prop_leases.empty:
             l_ids = prop_leases["Lease_ID"].tolist()
@@ -172,7 +190,6 @@ def show():
                     amt = pd.to_numeric(str(pr.get("Amount", "0")).replace(',', '.'), errors='coerce')
                     if pd.notna(amt): act_income += (amt * perc)
 
-        # 3. Θεωρητικά Έξοδα (Πάγια + Ασφάλιστρα + ΕΝΦΙΑ)
         exp_ins = 0.0
         if not insurances_df.empty:
             ins_rows = insurances_df[insurances_df["Property_ID"] == pid]
@@ -180,17 +197,15 @@ def show():
                 prem = pd.to_numeric(str(ir.get("Premium", "0")).replace(',', '.'), errors='coerce')
                 if pd.notna(prem): exp_ins += (prem * perc)
                 
-        # Επιμερισμός ΕΝΦΙΑ
         allocated_surcharge = 0.0
         if total_owner_prop_value > 0:
             allocated_surcharge = (op["Owner_Share_Value"] / total_owner_prop_value) * total_surcharge
         
-        owner_main_enfia = op["Main_ENFIA_100"] * perc
-        total_enfia = owner_main_enfia + allocated_surcharge
+        prop_main_enfia = enfia_breakdown_year.get(pid, 0.0)
+        total_enfia = prop_main_enfia + allocated_surcharge
         
         expected_expenses = (op["Fixed_Exp_100"] * perc) + exp_ins + total_enfia
 
-        # 4. Πραγματικά Έξοδα (Από καρτέλα Εξόδων)
         act_exp_other = 0.0
         if not expenses_df.empty:
             exp_rows = expenses_df[(expenses_df["Property_ID"] == pid) & (expenses_df["Category"] != "ΕΝΦΙΑ")]
@@ -201,7 +216,7 @@ def show():
                     ex_amt = pd.to_numeric(str(exr.get("Amount", "0")).replace(',', '.'), errors='coerce')
                     if pd.notna(ex_amt): act_exp_other += (ex_amt * perc)
         
-        actual_expenses = act_exp_other + total_enfia # Στο πραγματικό, προσθέτουμε τον ίδιο ΕΝΦΙΑ που υπολογίσαμε (είναι fixed cost)
+        actual_expenses = act_exp_other + total_enfia 
 
         total_exp_income += exp_income
         total_act_income += act_income
@@ -216,7 +231,6 @@ def show():
             "Act_Expenses": actual_expenses
         })
 
-    # --- ΒΗΜΑ 4: ΥΠΟΛΟΓΙΣΜΟΣ & ΕΠΙΜΕΡΙΣΜΟΣ ΦΟΡΟΥ ---
     total_exp_tax = calculate_property_tax(total_exp_income)
     total_act_tax = calculate_property_tax(total_act_income)
 
@@ -224,7 +238,6 @@ def show():
     total_exp_net, total_act_net = 0.0, 0.0
 
     for r in results:
-        # Αναλογικός επιμερισμός φόρου
         prop_exp_tax = total_exp_tax * (r["Exp_Income"] / total_exp_income) if total_exp_income > 0 else 0.0
         prop_act_tax = total_act_tax * (r["Act_Income"] / total_act_income) if total_act_income > 0 else 0.0
         
@@ -238,8 +251,8 @@ def show():
             "Ακίνητο": f"{r['Name']} ({r['Perc']*100:.0f}%)",
             "Θεωρ. Έσοδα": f"{r['Exp_Income']:.2f} €",
             "Πραγμ. Έσοδα": f"{r['Act_Income']:.2f} €",
-            "Θεωρ. Έξοδα & ΕΝΦΙΑ": f"{r['Exp_Expenses']:.2f} €",
-            "Πραγμ. Έξοδα & ΕΝΦΙΑ": f"{r['Act_Expenses']:.2f} €",
+            "Θεωρ. Έξοδα<br><span style='font-size:10px;'>(+ΕΝΦΙΑ)</span>": f"{r['Exp_Expenses']:.2f} €",
+            "Πραγμ. Έξοδα<br><span style='font-size:10px;'>(+ΕΝΦΙΑ)</span>": f"{r['Act_Expenses']:.2f} €",
             "Θεωρ. Φόρος": f"{prop_exp_tax:.2f} €",
             "Πραγμ. Φόρος": f"{prop_act_tax:.2f} €",
             "Θεωρ. Καθαρό": f"{exp_net:.2f} €",
@@ -247,7 +260,6 @@ def show():
             "Απόκλιση": f"{(act_net - exp_net):.2f} €"
         })
 
-    # --- ΟΠΤΙΚΟΠΟΙΗΣΗ UI ---
     st.markdown(f"#### Συνολική Εικόνα ({selected_year}) - ΑΦΜ: {selected_afm}")
     
     mc1, mc2, mc3, mc4 = st.columns(4)
@@ -266,7 +278,6 @@ def show():
     st.markdown("#### Ανάλυση ανά Ακίνητο")
     df_results = pd.DataFrame(final_results)
     
-    # Χρωματισμός Απόκλισης
     def highlight_variance(val):
         if "€" in val and " " in val:
             try:
@@ -276,5 +287,6 @@ def show():
             except: pass
         return ''
 
-    html_table = df_results.style.applymap(highlight_variance, subset=['Απόκλιση']).to_html(classes='custom-table', index=False)
-    st.write(f'<div style="overflow-x: auto;">{html_table}</div>', unsafe_allow_html=True)
+    # ΠΑΓΩΜΕΝΟΣ HTML ΠΙΝΑΚΑΣ ΓΙΑ ΤΙΣ ΑΝΑΦΟΡΕΣ (ΜΕ STYLER HTML OUTPUT)
+    html_table = df_results.style.applymap(highlight_variance, subset=['Απόκλιση']).to_html(classes='custom-table', escape=False, index=False)
+    st.write(f'<div class="table-container">{html_table}</div>', unsafe_allow_html=True)
