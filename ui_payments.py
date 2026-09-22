@@ -13,7 +13,7 @@ COMMON_CSS = """
     .matrix-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 950px; }
     .matrix-table th, .matrix-table td { padding: 6px; text-align: center; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; }
     .matrix-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; padding: 10px 6px; }
-    .matrix-table th:first-child, .matrix-table td:first-child { position: sticky; left: 0; background-color: #ffffff; z-index: 5; text-align: left; min-width: 140px; max-width: 220px; box-shadow: 1px 0 0 #bbb; }
+    .matrix-table th:first-child, .matrix-table td:first-child { position: sticky; left: 0; background-color: #ffffff; z-index: 5; text-align: left; min-width: 140px; max-width: 180px; white-space: normal !important; word-wrap: break-word; box-shadow: 1px 0 0 #bbb; }
     .matrix-table th:first-child { z-index: 6; box-shadow: 1px 1px 0 #bbb; }
     .matrix-cell-btn { display: block; width: 100%; text-align: center; color: #31333F; padding: 6px; border-radius: 4px; background-color: #f8f9fa; border: 1px solid #e9ecef; margin-bottom: 4px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-size: 12px; line-height: 1.3; }
     .matrix-cell-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; color: #000; }
@@ -24,7 +24,7 @@ COMMON_CSS = """
     .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s; }
     .custom-table th:hover { background-color: #e2e6ea; }
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 110px; }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 120px; max-width: 160px; white-space: normal !important; word-wrap: break-word; }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 12px; font-weight: bold; transition: 0.2s; text-align: center; }
     .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
@@ -174,7 +174,6 @@ def show():
     else:
         payments_df = pd.DataFrame(columns=['Payment_ID', 'Lease_ID', 'Payment_Type', 'Amount', 'Date_Received', 'Bank_Account', 'For_Month', 'For_Year', 'Status', 'Description', 'Calc_Month', 'Calc_Year'])
 
-    # Λεξικά για ευκολότερο φιλτράρισμα και εμφάνιση
     l_opts_all = {}
     lease_to_prop = {}
     lease_to_tenant = {}
@@ -205,14 +204,9 @@ def show():
             except: continue
             try: e_date = datetime.strptime(str(l['End_Date']), "%Y-%m-%d").date()
             except: e_date = date(2099, 12, 31)
-            
-            start_m_y = s_date.year * 12 + s_date.month
-            end_m_y = e_date.year * 12 + e_date.month
-            
-            if start_m_y <= test_m_y <= end_m_y:
+            if s_date.year * 12 + s_date.month <= test_m_y <= e_date.year * 12 + e_date.month:
                 rent = pd.to_numeric(str(l.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
                 return rent if pd.notna(rent) else 0.0, str(l['Lease_ID'])
-                
         latest = sorted_leases.iloc[0]
         rent = pd.to_numeric(str(latest.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
         return rent if pd.notna(rent) else 0.0, str(latest['Lease_ID'])
@@ -226,16 +220,11 @@ def show():
         current_year = datetime.today().year
         selected_year = st.selectbox("Επιλογή Έτους", [current_year - 1, current_year, current_year + 1, current_year + 2], index=1, key="pay_mat_year_sel")
         st.subheader(f"Κατάσταση Μισθωμάτων & Λογαριασμών - {selected_year}")
-        st.caption("Αγγίξτε ένα κελί (μήνα) για να προβάλετε, να εξοφλήσετε ή να προσθέσετε εισπράξεις.")
-
+        
         months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
         
-        html_code = f"""
-        <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
-        <div class="matrix-wrapper">
-            <table class="matrix-table">
-                <tr><th>Ακίνητο & Ενοικιαστής</th>
-        """
+        html_code = f"""<!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
+        <div class="matrix-wrapper"><table class="matrix-table"><tr><th>Ακίνητο & Ενοικιαστής</th>"""
         for m in months: html_code += f'<th>{m}</th>'
         html_code += '</tr>'
 
@@ -243,12 +232,10 @@ def show():
             l_id_list = group_leases['Lease_ID'].astype(str).tolist()
             first_l = group_leases.iloc[0]
             p_id = str(first_l.get("Property_ID", ""))
-            
             prop_charact = "-"
             if not properties_df.empty:
                 p_match = properties_df[properties_df["Property_ID"] == p_id]
                 if not p_match.empty: prop_charact = str(p_match.iloc[0].get('Χαρακτηριστικό', '-'))
-                    
             t_names = []
             for tid_clean in [t.strip() for t in str(first_l.get("Tenant_ID", "")).split(',') if t.strip()]:
                 t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
@@ -279,7 +266,6 @@ def show():
                         else:
                             short_type = p_type[:5] + "." if len(p_type) > 5 else p_type
                             btn_text = f"{short_type}<br>⚠️ Εκκρ." if is_pending else f"{short_type}<br>✅ Εξοφλ."
-                                
                         html_code += f'<button class="matrix-cell-btn" onclick="triggerPython(\'{click_payload}\', \'hidden_pay_matrix\')">{btn_text}</button>'
                 html_code += '</td>'
             html_code += '</tr>'
@@ -563,7 +549,6 @@ def show():
             if payments_df.empty: 
                 st.info("Δεν έχουν καταγραφεί εισπράξεις.")
             else:
-                # ---------------- ΝΕΑ ΦΙΛΤΡΑ (2 ΓΡΑΜΜΕΣ) ----------------
                 fc1, fc2, fc3 = st.columns(3)
                 fc4, fc5 = st.columns(2)
                 
@@ -600,7 +585,6 @@ def show():
                     prop_name = lease_to_prop.get(l_id, "Άγνωστο")
                     tenant_name = lease_to_tenant.get(l_id, "Άγνωστος")
                     
-                    # Εφαρμογή των 5 φίλτρων
                     if sel_year != "Όλα τα έτη" and row_y != sel_year: continue
                     if sel_prop != "Όλα τα ακίνητα" and prop_name != sel_prop: continue
                     if sel_tenant != "Όλοι οι μισθωτές" and tenant_name != sel_tenant: continue
@@ -615,9 +599,9 @@ def show():
                     
                     pay_list_data.append({
                         "Payment_ID": str(row.get("Payment_ID", "")),
+                        "Μίσθωση / Ακίνητο": l_opts_all.get(str(row.get("Lease_ID", "")), "Διαγραμμένη Μίσθωση"),
                         "Ημερομηνία": str(row.get("Date_Received", "")),
                         "Μήνας / Έτος": f"{row.get('Calc_Month', '-')} / {row.get('Calc_Year', '-')}",
-                        "Μίσθωση / Ακίνητο": l_opts_all.get(str(row.get("Lease_ID", "")), "Διαγραμμένη Μίσθωση"),
                         "Είδος": cat_display,
                         "Ποσό": f"{amt_val:.2f} €".replace('.', ','),
                         "Κατάσταση": "✅ Εξοφλήθηκε" if status_val == "Εξοφλήθηκε" else "⚠️ Εκκρεμεί",
@@ -633,9 +617,9 @@ def show():
                         <table id="pay-table" class="custom-table">
                             <thead>
                                 <tr>
-                                    <th onclick="sortTable('pay-table', 0)">Ημερομηνία ⇕</th>
-                                    <th onclick="sortTable('pay-table', 1)">Μήνας / Έτος ⇕</th>
-                                    <th onclick="sortTable('pay-table', 2)">Μίσθωση / Ακίνητο ⇕</th>
+                                    <th onclick="sortTable('pay-table', 0)">Μίσθωση / Ακίνητο ⇕</th>
+                                    <th onclick="sortTable('pay-table', 1)">Ημερομηνία ⇕</th>
+                                    <th onclick="sortTable('pay-table', 2)">Μήνας / Έτος ⇕</th>
                                     <th onclick="sortTable('pay-table', 3)">Είδος ⇕</th>
                                     <th onclick="sortTable('pay-table', 4)">Ποσό ⇕</th>
                                     <th onclick="sortTable('pay-table', 5)">Κατάσταση ⇕</th>
@@ -648,9 +632,9 @@ def show():
                     for item in pay_list_data[::-1]:
                         html_code += f"""
                                 <tr>
+                                    <td>{item['Μίσθωση / Ακίνητο']}</td>
                                     <td>{item['Ημερομηνία']}</td>
                                     <td>{item['Μήνας / Έτος']}</td>
-                                    <td>{item['Μίσθωση / Ακίνητο']}</td>
                                     <td>{item['Είδος']}</td>
                                     <td><strong>{item['Ποσό']}</strong></td>
                                     <td>{item['Κατάσταση']}</td>
