@@ -174,7 +174,11 @@ def show():
     else:
         payments_df = pd.DataFrame(columns=['Payment_ID', 'Lease_ID', 'Payment_Type', 'Amount', 'Date_Received', 'Bank_Account', 'For_Month', 'For_Year', 'Status', 'Description', 'Calc_Month', 'Calc_Year'])
 
+    # Λεξικά για ευκολότερο φιλτράρισμα και εμφάνιση
     l_opts_all = {}
+    lease_to_prop = {}
+    lease_to_tenant = {}
+    
     for _, r in leases_df.iterrows():
         l_id = str(r.get("Lease_ID", ""))
         p_id = str(r.get("Property_ID", ""))
@@ -185,7 +189,11 @@ def show():
         for tid_clean in [t.strip() for t in str(r.get("Tenant_ID", "")).split(',') if t.strip()]:
             t_match = tenants_df[tenants_df["Tenant_ID"] == tid_clean]
             if not t_match.empty: t_names.append(f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}")
-        l_opts_all[l_id] = f"{' & '.join(t_names) if t_names else 'Άγνωστος'} | {p_charact}"
+        
+        t_display = ' & '.join(t_names) if t_names else 'Άγνωστος'
+        l_opts_all[l_id] = f"{t_display} | {p_charact}"
+        lease_to_prop[l_id] = p_charact
+        lease_to_tenant[l_id] = t_display
 
     leases_df['Group_Key'] = leases_df['Property_ID'] + "_" + leases_df['Tenant_ID']
 
@@ -555,7 +563,9 @@ def show():
             if payments_df.empty: 
                 st.info("Δεν έχουν καταγραφεί εισπράξεις.")
             else:
-                fc1, fc2 = st.columns(2)
+                # ---------------- ΝΕΑ ΦΙΛΤΡΑ (2 ΓΡΑΜΜΕΣ) ----------------
+                fc1, fc2, fc3 = st.columns(3)
+                fc4, fc5 = st.columns(2)
                 
                 all_years = set()
                 for _, r in payments_df.iterrows():
@@ -564,18 +574,38 @@ def show():
                 sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
                 sel_year = fc1.selectbox("Επιλογή Έτους", sorted_years, key="pay_filter_year")
 
+                unique_props = set(lease_to_prop.values())
+                all_props_opts = ["Όλα τα ακίνητα"] + sorted(list(unique_props))
+                sel_prop = fc2.selectbox("Ακίνητο", all_props_opts, key="pay_filter_prop")
+
+                unique_tenants = set(lease_to_tenant.values())
+                all_tenants_opts = ["Όλοι οι μισθωτές"] + sorted(list(unique_tenants))
+                sel_tenant = fc3.selectbox("Μισθωτής", all_tenants_opts, key="pay_filter_tenant")
+
                 all_types = ["Όλα τα είδη", "Ενοίκιο", "Νερό", "Κοινόχρηστα", "Ρεύμα", "Άλλο"]
-                sel_type = fc2.selectbox("Είδος", all_types, key="pay_filter_type")
+                sel_type = fc4.selectbox("Είδος", all_types, key="pay_filter_type")
+                
+                all_statuses = ["Όλες", "Εξοφλήθηκε", "Εκκρεμεί"]
+                sel_status = fc5.selectbox("Κατάσταση", all_statuses, key="pay_filter_status")
                 
                 st.write("") 
 
                 pay_list_data = []
                 for _, row in payments_df.iterrows():
                     p_type = str(row.get("Payment_Type", ""))
-                    if sel_type != "Όλα τα είδη" and p_type != sel_type: continue
-                    
                     row_y = str(row.get("Calc_Year", "")).strip()
+                    status_val = str(row.get("Status", "Εξοφλήθηκε"))
+                    l_id = str(row.get("Lease_ID", ""))
+                    
+                    prop_name = lease_to_prop.get(l_id, "Άγνωστο")
+                    tenant_name = lease_to_tenant.get(l_id, "Άγνωστος")
+                    
+                    # Εφαρμογή των 5 φίλτρων
                     if sel_year != "Όλα τα έτη" and row_y != sel_year: continue
+                    if sel_prop != "Όλα τα ακίνητα" and prop_name != sel_prop: continue
+                    if sel_tenant != "Όλοι οι μισθωτές" and tenant_name != sel_tenant: continue
+                    if sel_type != "Όλα τα είδη" and p_type != sel_type: continue
+                    if sel_status != "Όλες" and status_val != sel_status: continue
 
                     amt_val = pd.to_numeric(str(row.get('Amount', '0')).replace(',', '.'), errors='coerce')
                     if pd.isna(amt_val): amt_val = 0.0
@@ -590,7 +620,7 @@ def show():
                         "Μίσθωση / Ακίνητο": l_opts_all.get(str(row.get("Lease_ID", "")), "Διαγραμμένη Μίσθωση"),
                         "Είδος": cat_display,
                         "Ποσό": f"{amt_val:.2f} €".replace('.', ','),
-                        "Κατάσταση": "✅ Εξοφλήθηκε" if str(row.get("Status", "")) == "Εξοφλήθηκε" else "⚠️ Εκκρεμεί",
+                        "Κατάσταση": "✅ Εξοφλήθηκε" if status_val == "Εξοφλήθηκε" else "⚠️ Εκκρεμεί",
                         "Μέθοδος": str(row.get("Bank_Account", ""))
                     })
                 
