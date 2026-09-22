@@ -2,6 +2,7 @@ import streamlit as st
 import gsheets_service
 import pandas as pd
 import uuid
+import time
 from datetime import date, datetime
 
 MONTHS_DICT = {1:"Ιανουάριος", 2:"Φεβρουάριος", 3:"Μάρτιος", 4:"Απρίλιος", 5:"Μάιος", 6:"Ιούνιος", 
@@ -27,9 +28,8 @@ def show():
     # 1. ΑΚΙΝΗΤΑ (Υπο-μενού)
     # =====================================================================
     with main_tab_prop:
-        # Χρησιμοποιούμε st.radio ως "ψεύτικες" υπο-καρτέλες (Sub-tabs)
         sub_prop = st.radio("Ενέργεια:", ["📋 Ιστορικό / Λίστα", "➕ Νέο Ακίνητο", "✏️ Επεξεργασία"], horizontal=True, key="sub_prop", label_visibility="collapsed")
-        st.write("") # Λίγο κενό για αισθητικούς λόγους
+        st.write("") 
         
         if sub_prop == "📋 Ιστορικό / Λίστα":
             if properties_df.empty: st.info("Δεν υπάρχουν καταχωρημένα ακίνητα.")
@@ -92,6 +92,7 @@ def show():
                             extra_str = ",".join(map(str, extra_months))
                             gsheets_service.add_property([f"PR-{uuid.uuid4().hex[:6].upper()}", atak, nomos, dimos, address, number, floor, sqm_input, charact] + owner_data + [extra_str])
                             st.success("Το ακίνητο αποθηκεύτηκε επιτυχώς!")
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
                     else: st.warning("Συμπληρώστε τα υποχρεωτικά πεδία και τον 1ο Ιδιοκτήτη.")
@@ -141,6 +142,7 @@ def show():
                         try:
                             gsheets_service.delete_property(selected_edit_id)
                             st.success("Το ακίνητο διαγράφηκε!")
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
 
@@ -149,6 +151,7 @@ def show():
                             e_extra_str = ",".join(map(str, e_extra_months))
                             gsheets_service.update_property(selected_edit_id, [selected_edit_id, e_atak, e_nomos, e_dimos, e_address, e_number, e_floor, e_sqm, e_charact] + e_owner_data + [e_extra_str])
                             st.success("Αποθηκεύτηκαν!")
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
 
@@ -191,6 +194,7 @@ def show():
                         try:
                             gsheets_service.add_tenant([f"TN-{uuid.uuid4().hex[:6].upper()}", fname, lname, afm, phone, email])
                             st.success("Ο ενοικιαστής αποθηκεύτηκε!")
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
                     else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
@@ -215,6 +219,7 @@ def show():
                         try:
                             gsheets_service.delete_tenant(selected_t_edit)
                             st.success("Ο ενοικιαστής διαγράφηκε!")
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
 
@@ -223,6 +228,7 @@ def show():
                             try:
                                 gsheets_service.update_tenant(selected_t_edit, [selected_t_edit, e_t_fname, e_t_lname, e_t_afm, e_t_phone, e_t_email])
                                 st.success("Αποθηκεύτηκαν!")
+                                time.sleep(1.5)
                                 st.rerun()
                             except Exception as e: st.error(f"Σφάλμα: {e}")
                         else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
@@ -285,6 +291,7 @@ def show():
                                 ins_id = f"INS-{uuid.uuid4().hex[:6].upper()}"
                                 gsheets_service.add_insurance([ins_id, i_prop, i_cat, i_comp, i_num, i_date.strftime("%Y-%m-%d"), i_dur, i_prem, i_build, i_cont])
                                 st.success("Το ασφαλιστήριο καταχωρήθηκε επιτυχώς!")
+                                time.sleep(1.5)
                                 st.rerun()
                             except Exception as e: st.error(f"Σφάλμα: {e}")
                         else: st.warning("Συμπληρώστε υποχρεωτικά την Εταιρεία και τον Αριθμό Συμβολαίου.")
@@ -346,6 +353,7 @@ def show():
                         try:
                             gsheets_service.delete_insurance(selected_i_edit)
                             st.success("Το ασφαλιστήριο διαγράφηκε!")
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
 
@@ -355,6 +363,7 @@ def show():
                                 new_row = [selected_i_edit, e_prop, e_cat, e_comp, e_num, e_date.strftime("%Y-%m-%d"), e_dur, e_prem, e_build, e_cont]
                                 gsheets_service.update_insurance(selected_i_edit, new_row)
                                 st.success("Οι αλλαγές αποθηκεύτηκαν!")
+                                time.sleep(1.5)
                                 st.rerun()
                             except Exception as e: st.error(f"Σφάλμα επεξεργασίας: {e}")
                         else: st.warning("Συμπληρώστε υποχρεωτικά την Εταιρεία και τον Αριθμό Συμβολαίου.")
