@@ -4,18 +4,27 @@ import pandas as pd
 from datetime import datetime
 import streamlit.components.v1 as components
 
-# =========================================================================
-# ΚΟΙΝΟ CSS & JS ΓΙΑ ΠΑΓΩΜΕΝΟΥΣ HTML ΠΙΝΑΚΕΣ & SORTING
-# =========================================================================
 COMMON_CSS = """
 <style>
-    html, body { font-family: sans-serif; }
-    .table-container { height: 500px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 600px; }
-    .custom-table th, .custom-table td { padding: 8px 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
+    html, body { font-family: sans-serif; background-color: transparent; }
+    .table-container { 
+        max-height: 500px; /* Αλλαγή σε max-height για να εξαφανιστεί το άσχημο κενό! */
+        overflow-y: auto; overflow-x: auto; 
+        border: 1px solid #ddd; border-radius: 8px; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; 
+    }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 500px; }
+    .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
     .custom-table th:hover { background-color: #e2e6ea; }
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 100px; max-width: 160px; white-space: normal !important; word-wrap: break-word; }
+    
+    /* Πολύ πιο στενή 1η στήλη για κινητά */
+    .custom-table th:first-child, .custom-table td:first-child { 
+        position: sticky; left: 0; z-index: 3; background-color: #ffffff; 
+        box-shadow: 1px 0 0 #ddd; font-weight: 600; 
+        min-width: 80px; max-width: 120px; 
+        white-space: normal !important; word-wrap: break-word; 
+    }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     
     @media (prefers-color-scheme: dark) {
@@ -25,7 +34,7 @@ COMMON_CSS = """
         .custom-table th:hover { background-color: #383a45; }
         .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
-        .custom-table td { border-color: #444; }
+        .custom-table td { border-color: #444; color: white; }
     }
 </style>
 """
@@ -48,10 +57,8 @@ COMMON_JS = """
                 if(valX.match(/^\\d{4}-\\d{2}-\\d{2}/)) valX = new Date(valX).getTime();
                 if(valY.match(/^\\d{4}-\\d{2}-\\d{2}/)) valY = new Date(valY).getTime();
                 
-                // Ειδικός κανόνας για τον αριθμό ημερών στη στήλη "Ημέρες ως Λήξη"
                 if(!isNaN(valX) && !isNaN(valY) && valX !== "" && valY !== "") {
-                    valX = parseFloat(valX);
-                    valY = parseFloat(valY);
+                    valX = parseFloat(valX); valY = parseFloat(valY);
                 }
 
                 if (dir == "asc") { if (valX > valY) { shouldSwitch = true; break; } } 
@@ -82,7 +89,6 @@ def calculate_property_tax(gross_income):
     return tax
 
 def show():
-    st.markdown(COMMON_CSS, unsafe_allow_html=True)
     st.header("Επισκόπηση & Ταμειακές Ροές")
     
     try:
@@ -95,14 +101,12 @@ def show():
         st.error(f"Αδυναμία φόρτωσης δεδομένων: {e}")
         return
 
-    # --- SECTION 1: ΠΡΑΓΜΑΤΙΚΕΣ ΤΑΜΕΙΑΚΕΣ ΡΟΕΣ (CASH FLOW) ---
     st.subheader("💡 Πραγματικές Ταμειακές Ροές ανά Ιδιοκτήτη")
     current_year = datetime.today().year
     selected_year = st.selectbox("Ανάλυση Έτους:", [current_year - 1, current_year, current_year + 1], index=1)
     
     owner_finances = {} 
 
-    # 1. Υπολογισμός Εσόδων ανά Ακίνητο -> Αναλογικά στον Ιδιοκτήτη
     if not payments_df.empty:
         payments_df['Date_Obj'] = pd.to_datetime(payments_df['Date_Received'], errors='coerce')
         valid_income = payments_df[
@@ -134,7 +138,6 @@ def show():
                             if afm not in owner_finances: owner_finances[afm] = {'Name': name, 'Income': 0, 'ENFIA': 0, 'Prop_Expenses': 0}
                             owner_finances[afm]['Income'] += amt * (perc / 100.0)
 
-    # 2. Υπολογισμός Εξόδων (ΕΝΦΙΑ & Ακινήτου)
     if not expenses_df.empty:
         expenses_df['Date_Obj'] = pd.to_datetime(expenses_df['Date_Paid'], errors='coerce')
         valid_expenses = expenses_df[(expenses_df['Date_Obj'].dt.year == selected_year)]
@@ -164,19 +167,17 @@ def show():
                         if afm and afm != 'nan' and perc > 0 and right in ["Πλήρης Κυριότητα", "Επικαρπία"]:
                             if afm in owner_finances: owner_finances[afm]['Prop_Expenses'] += amt * (perc / 100.0)
 
-    # 3. Εμφάνιση Αποτελεσμάτων
     if not owner_finances:
         st.info("Δεν βρέθηκαν ολοκληρωμένες οικονομικές κινήσεις για το επιλεγμένο έτος.")
     else:
         for afm, data in owner_finances.items():
             inc = data['Income']
-            tax = calculate_property_tax(inc) # Χρήση της σωστής μαθηματικής συνάρτησης
+            tax = calculate_property_tax(inc)
             
             enfia = data['ENFIA']
             prop_exp = data['Prop_Expenses']
             net_cash = inc - tax - enfia - prop_exp
             
-            color = "success" if net_cash >= 0 else "error"
             st.info(f"**{data['Name']} (ΑΦΜ: {afm})**")
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.metric("1. Εισπράξεις Ενοικίων", f"{inc:,.2f} €".replace('.', ','))
@@ -186,7 +187,6 @@ def show():
             c5.metric("💰 Καθαρό Ταμείο", f"{net_cash:,.2f} €".replace('.', ','), delta="Κέρδος" if net_cash >=0 else "Ζημιά", delta_color="normal" if net_cash >=0 else "inverse")
             st.divider()
 
-    # --- SECTION 2: ΛΙΣΤΑ ΕΝΕΡΓΩΝ ΜΙΣΘΩΣΕΩΝ ---
     st.subheader("📋 Ενεργές Μισθώσεις")
     if leases_df.empty: st.write("Καμία μίσθωση.")
     else:
@@ -212,7 +212,6 @@ def show():
         if not active_leases:
             st.success("Δεν υπάρχουν ενεργές μισθώσεις.")
         else:
-            # HTML Παγωμένος Πίνακας Dashboard
             html_code = f"""
             <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
             <div class="table-container">
@@ -228,7 +227,6 @@ def show():
                     <tbody>
             """
             for item in active_leases:
-                # Χρωματισμός των ημερών αν είναι λιγότερες από 60
                 rem_color = "color: #dc3545; font-weight: bold;" if item['Ημέρες ως Λήξη'] <= 60 else ""
                 html_code += f"""
                         <tr>
@@ -245,5 +243,6 @@ def show():
             {COMMON_JS}
             </body></html>
             """
-            t_height = min(550, 150 + len(active_leases) * 45)
+            # Υπολογισμός ύψους iframe ώστε να μην αφήνει πολύ κενό, αλλά με max 550.
+            t_height = min(550, 70 + len(active_leases) * 45)
             components.html(html_code, height=t_height, scrolling=False)
