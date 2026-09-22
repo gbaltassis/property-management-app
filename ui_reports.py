@@ -7,39 +7,68 @@ import json
 
 COMMON_CSS = """
 <style>
-    .metric-card {
-        background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; text-align: center; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
+    .metric-card { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; text-align: center; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .metric-title { font-size: 14px; color: #6c757d; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
     .metric-value { font-size: 24px; color: #31333F; font-weight: 700; }
     .metric-sub { font-size: 12px; color: #adb5bd; margin-top: 5px; }
     .val-positive { color: #28a745 !important; }
     .val-negative { color: #dc3545 !important; }
     
-    /* CSS ΓΙΑ ΠΑΓΩΜΕΝΕΣ ΕΠΙΚΕΦΑΛΙΔΕΣ ΚΑΙ ΠΡΩΤΗ ΣΤΗΛΗ ΣΕ HTML ΠΙΝΑΚΕΣ */
-    .table-container {
-        max-height: 500px;
-        overflow-y: auto;
-        overflow-x: auto;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: sans-serif; font-size: 13px; background: white; min-width: 1000px; }
+    .table-container { height: 500px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: sans-serif; font-size: 13px; background: white; min-width: 900px; }
     .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: right; vertical-align: top; }
-    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 #ddd; text-align: center;}
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 1; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 180px; text-align: left; }
+    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 #ddd; text-align: center; cursor: pointer; user-select: none; transition: background-color 0.2s;}
+    .custom-table th:hover { background-color: #e2e6ea; }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 1; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 120px; max-width: 160px; white-space: normal !important; word-wrap: break-word; text-align: left; }
     .custom-table th:first-child { z-index: 3; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     
     @media (prefers-color-scheme: dark) {
         .table-container { border-color: #444; }
         .custom-table { background: #0e1117; color: white; }
         .custom-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
+        .custom-table th:hover { background-color: #383a45; }
         .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
         .custom-table td { border-color: #444; }
     }
 </style>
+"""
+
+COMMON_JS = """
+<script>
+    function sortTable(tableId, n) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById(tableId);
+        switching = true;
+        dir = "asc"; 
+        while (switching) {
+            switching = false;
+            rows = table.getElementsByTagName("TR");
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                if(!x || !y) continue;
+                let valX = x.innerText.trim().toLowerCase();
+                let valY = y.innerText.trim().toLowerCase();
+                if(valX.includes('€')) valX = parseFloat(valX.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                if(valY.includes('€')) valY = parseFloat(valY.replace(/[^0-9,-]/g, '').replace(',', '.'));
+                if (dir == "asc") {
+                    if (valX > valY) { shouldSwitch = true; break; }
+                } else if (dir == "desc") {
+                    if (valX < valY) { shouldSwitch = true; break; }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount ++;      
+            } else {
+                if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
+            }
+        }
+    }
+</script>
 """
 
 def calculate_property_tax(gross_income):
@@ -98,6 +127,7 @@ def show():
     with col2:
         afm_opts = list(owners_dict.keys())
         selected_afm = st.selectbox("Επιλογή Ιδιοκτήτη (ΑΦΜ)", afm_opts, format_func=lambda x: f"{x} - {owners_dict[x]}", key="rep_afm_filter")
+
     st.markdown("---")
 
     owner_props = []
@@ -250,8 +280,8 @@ def show():
             "Ακίνητο": f"{r['Name']} ({r['Perc']*100:.0f}%)",
             "Θεωρ. Έσοδα": f"{r['Exp_Income']:.2f} €",
             "Πραγμ. Έσοδα": f"{r['Act_Income']:.2f} €",
-            "Θεωρ. Έξοδα<br><span style='font-size:10px;'>(+ΕΝΦΙΑ)</span>": f"{r['Exp_Expenses']:.2f} €",
-            "Πραγμ. Έξοδα<br><span style='font-size:10px;'>(+ΕΝΦΙΑ)</span>": f"{r['Act_Expenses']:.2f} €",
+            "Θεωρ. Έξοδα (+ΕΝΦΙΑ)": f"{r['Exp_Expenses']:.2f} €",
+            "Πραγμ. Έξοδα (+ΕΝΦΙΑ)": f"{r['Act_Expenses']:.2f} €",
             "Θεωρ. Φόρος": f"{prop_exp_tax:.2f} €",
             "Πραγμ. Φόρος": f"{prop_act_tax:.2f} €",
             "Θεωρ. Καθαρό": f"{exp_net:.2f} €",
@@ -275,17 +305,54 @@ def show():
         st.markdown(f"<div class='metric-card'><div class='metric-title'>Απόκλιση (Variance)</div><div class='metric-value {var_color}'>{sign}{variance:.2f} €</div><div class='metric-sub'>Σε σχέση με το προσδοκώμενο</div></div>", unsafe_allow_html=True)
 
     st.markdown("#### Ανάλυση ανά Ακίνητο")
-    df_results = pd.DataFrame(final_results)
     
-    def highlight_variance(val):
-        if "€" in val and " " in val:
-            try:
-                num = float(val.replace(" €", "").replace(",", "."))
-                if num < 0: return 'color: #dc3545; font-weight: bold;'
-                elif num > 0: return 'color: #28a745; font-weight: bold;'
-            except: pass
-        return ''
-
-    # ΠΑΓΩΜΕΝΟΣ HTML ΠΙΝΑΚΑΣ ΓΙΑ ΤΙΣ ΑΝΑΦΟΡΕΣ (ΜΕ STYLER HTML OUTPUT)
-    html_table = df_results.style.applymap(highlight_variance, subset=['Απόκλιση']).to_html(classes='custom-table', escape=False, index=False)
-    st.write(f'<div class="table-container">{html_table}</div>', unsafe_allow_html=True)
+    if not final_results:
+        st.info("Δεν υπάρχουν δεδομένα.")
+    else:
+        html_code = f"""
+        <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
+        <div class="table-container">
+            <table id="rep-table" class="custom-table">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('rep-table', 0)">Ακίνητο ⇕</th>
+                        <th onclick="sortTable('rep-table', 1)">Θεωρ. Έσοδα ⇕</th>
+                        <th onclick="sortTable('rep-table', 2)">Πραγμ. Έσοδα ⇕</th>
+                        <th onclick="sortTable('rep-table', 3)">Θεωρ. Έξοδα ⇕</th>
+                        <th onclick="sortTable('rep-table', 4)">Πραγμ. Έξοδα ⇕</th>
+                        <th onclick="sortTable('rep-table', 5)">Θεωρ. Φόρος ⇕</th>
+                        <th onclick="sortTable('rep-table', 6)">Πραγμ. Φόρος ⇕</th>
+                        <th onclick="sortTable('rep-table', 7)">Θεωρ. Καθαρό ⇕</th>
+                        <th onclick="sortTable('rep-table', 8)">Πραγμ. Καθαρό ⇕</th>
+                        <th onclick="sortTable('rep-table', 9)">Απόκλιση ⇕</th>
+                    </tr>
+                </thead>
+                <tbody>
+        """
+        for item in final_results:
+            var_val = float(item['Απόκλιση'].replace(' €', '').replace(',', '.'))
+            var_color = "color: #28a745; font-weight: bold;" if var_val > 0 else "color: #dc3545; font-weight: bold;" if var_val < 0 else ""
+            
+            html_code += f"""
+                    <tr>
+                        <td>{item['Ακίνητο']}</td>
+                        <td>{item['Θεωρ. Έσοδα']}</td>
+                        <td>{item['Πραγμ. Έσοδα']}</td>
+                        <td>{item['Θεωρ. Έξοδα (+ΕΝΦΙΑ)']}</td>
+                        <td>{item['Πραγμ. Έξοδα (+ΕΝΦΙΑ)']}</td>
+                        <td>{item['Θεωρ. Φόρος']}</td>
+                        <td>{item['Πραγμ. Φόρος']}</td>
+                        <td>{item['Θεωρ. Καθαρό']}</td>
+                        <td>{item['Πραγμ. Καθαρό']}</td>
+                        <td style="{var_color}">{item['Απόκλιση']}</td>
+                    </tr>
+            """
+        html_code += f"""
+                </tbody>
+            </table>
+        </div>
+        {COMMON_JS}
+        </body></html>
+        """
+        import streamlit.components.v1 as components
+        components.html(html_code, height=520, scrolling=False)
