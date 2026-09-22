@@ -91,13 +91,23 @@ def update_expense(id, row): update_row_by_id("Expenses", id, row, fetch_all_exp
 def delete_expense(id): delete_row_by_id("Expenses", id, fetch_all_expenses)
 
 def fetch_all_insurances():
-    return get_dataframe('Insurances')
+    worksheet = get_worksheet("Insurances")
+    if not worksheet: return pd.DataFrame()
+    data = worksheet.get_all_records()
+    return pd.DataFrame(data)
 
 def add_insurance(row_data):
-    append_row('Insurances', row_data)
+    worksheet = get_worksheet("Insurances")
+    worksheet.append_row(row_data)
 
 def update_insurance(ins_id, row_data):
-    update_row('Insurances', 'Insurance_ID', ins_id, row_data)
+    worksheet = get_worksheet("Insurances")
+    cell = worksheet.find(ins_id, in_column=1)
+    if cell:
+        worksheet.update(f"A{cell.row}:J{cell.row}", [row_data])
 
 def delete_insurance(ins_id):
-    delete_row('Insurances', 'Insurance_ID', ins_id)
+    worksheet = get_worksheet("Insurances")
+    cell = worksheet.find(ins_id, in_column=1)
+    if cell:
+        worksheet.delete_rows(cell.row)
