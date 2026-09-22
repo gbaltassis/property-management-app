@@ -12,25 +12,15 @@ MONTHS_DICT = {1:"Ιανουάριος", 2:"Φεβρουάριος", 3:"Μάρτ
 COMMON_CSS = """
 <style>
     html, body { font-family: sans-serif; }
-    .table-container {
-        height: 550px;
-        overflow-y: auto;
-        overflow-x: auto;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-    }
-    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 900px; }
-    .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: top; }
+    .table-container { height: 550px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 600px; }
+    .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
     .custom-table th:hover { background-color: #e2e6ea; }
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 150px; }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 90px; max-width: 140px; white-space: normal !important; word-wrap: break-word; }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
-    
-    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 12px; font-weight: bold; transition: 0.2s; }
+    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 4px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 11px; font-weight: bold; transition: 0.2s; text-align: center; }
     .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
-
     @media (prefers-color-scheme: dark) {
         .table-container { border-color: #444; }
         .custom-table { background: #0e1117; color: white; }
@@ -40,7 +30,6 @@ COMMON_CSS = """
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
         .custom-table td { border-color: #444; }
         .action-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
-        .action-btn:hover { background-color: #2a2e37; color: #fff; }
     }
 </style>
 """
@@ -50,45 +39,25 @@ COMMON_JS = """
     function sortTable(tableId, n) {
         var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
         table = document.getElementById(tableId);
-        switching = true;
-        dir = "asc"; 
+        switching = true; dir = "asc"; 
         while (switching) {
-            switching = false;
-            rows = table.getElementsByTagName("TR");
+            switching = false; rows = table.getElementsByTagName("TR");
             for (i = 1; i < (rows.length - 1); i++) {
                 shouldSwitch = false;
-                x = rows[i].getElementsByTagName("TD")[n];
-                y = rows[i + 1].getElementsByTagName("TD")[n];
+                x = rows[i].getElementsByTagName("TD")[n]; y = rows[i + 1].getElementsByTagName("TD")[n];
                 if(!x || !y) continue;
-                
-                let valX = x.innerText.trim().toLowerCase();
-                let valY = y.innerText.trim().toLowerCase();
-                
+                let valX = x.innerText.trim().toLowerCase(); let valY = y.innerText.trim().toLowerCase();
                 if(valX.includes('€')) valX = parseFloat(valX.replace(/[^0-9,-]/g, '').replace(',', '.'));
                 if(valY.includes('€')) valY = parseFloat(valY.replace(/[^0-9,-]/g, '').replace(',', '.'));
-                
-                if(valX.match(/^\d{4}-\d{2}-\d{2}/)) valX = new Date(valX).getTime();
-                if(valY.match(/^\d{4}-\d{2}-\d{2}/)) valY = new Date(valY).getTime();
-                
-                if (dir == "asc") {
-                    if (valX > valY) { shouldSwitch = true; break; }
-                } else if (dir == "desc") {
-                    if (valX < valY) { shouldSwitch = true; break; }
-                }
+                if(valX.match(/^\\d{4}-\\d{2}-\\d{2}/)) valX = new Date(valX).getTime();
+                if(valY.match(/^\\d{4}-\\d{2}-\\d{2}/)) valY = new Date(valY).getTime();
+                if (dir == "asc") { if (valX > valY) { shouldSwitch = true; break; } } 
+                else if (dir == "desc") { if (valX < valY) { shouldSwitch = true; break; } }
             }
-            if (shouldSwitch) {
-                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                switching = true;
-                switchcount ++;      
-            } else {
-                if (switchcount == 0 && dir == "asc") {
-                    dir = "desc";
-                    switching = true;
-                }
-            }
+            if (shouldSwitch) { rows[i].parentNode.insertBefore(rows[i + 1], rows[i]); switching = true; switchcount ++; } 
+            else { if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; } }
         }
     }
-
     (function hideInput() {
         var pDoc = window.parent.document;
         var inputs = pDoc.querySelectorAll('input[aria-label^="hidden_"]');
@@ -97,11 +66,8 @@ COMMON_JS = """
                 var wrapper = input.closest('div[data-testid="stTextInput"]');
                 if (wrapper) { wrapper.style.position = 'absolute'; wrapper.style.opacity = '0'; wrapper.style.pointerEvents = 'none'; wrapper.style.height = '0px'; wrapper.style.overflow = 'hidden'; }
             });
-        } else {
-            setTimeout(hideInput, 100);
-        }
+        } else { setTimeout(hideInput, 100); }
     })();
-
     function triggerPython(action_val, input_name) {
         var payload = action_val + '|' + Date.now();
         var pDoc = window.parent.document;
@@ -117,41 +83,46 @@ COMMON_JS = """
 """
 
 def handle_prop_action():
-    val = st.session_state.hidden_prop_click_val
+    key = st.session_state.current_prop_hidden_key
+    val = st.session_state.get(key, "")
     if val:
         parts = val.split('|')
         if parts[0].startswith("EDIT_"):
             st.session_state.prop_action = 'edit'
             st.session_state.action_prop_id = parts[0].replace("EDIT_", "")
-        st.session_state.hidden_prop_click_val = ""
+        st.session_state[key] = ""
 
 def handle_tenant_action():
-    val = st.session_state.hidden_tenant_click_val
+    key = st.session_state.current_tenant_hidden_key
+    val = st.session_state.get(key, "")
     if val:
         parts = val.split('|')
         if parts[0].startswith("EDIT_"):
             st.session_state.tenant_action = 'edit'
             st.session_state.action_tenant_id = parts[0].replace("EDIT_", "")
-        st.session_state.hidden_tenant_click_val = ""
+        st.session_state[key] = ""
 
 def handle_ins_action():
-    val = st.session_state.hidden_ins_click_val
+    key = st.session_state.current_ins_hidden_key
+    val = st.session_state.get(key, "")
     if val:
         parts = val.split('|')
         if parts[0].startswith("EDIT_"):
             st.session_state.ins_action = 'edit'
             st.session_state.action_ins_id = parts[0].replace("EDIT_", "")
-        st.session_state.hidden_ins_click_val = ""
+        st.session_state[key] = ""
 
 def show():
-    # Setup States
     for key in ["prop_action", "action_prop_id", "tenant_action", "action_tenant_id", "ins_action", "action_ins_id"]:
         if key not in st.session_state: st.session_state[key] = None
 
-    # Hidden inputs for routing
-    st.text_input("hidden_prop_click", key="hidden_prop_click_val", label_visibility="collapsed", on_change=handle_prop_action)
-    st.text_input("hidden_tenant_click", key="hidden_tenant_click_val", label_visibility="collapsed", on_change=handle_tenant_action)
-    st.text_input("hidden_ins_click", key="hidden_ins_click_val", label_visibility="collapsed", on_change=handle_ins_action)
+    if "current_prop_hidden_key" not in st.session_state: st.session_state.current_prop_hidden_key = f"h_prop_{uuid.uuid4().hex[:6]}"
+    if "current_tenant_hidden_key" not in st.session_state: st.session_state.current_tenant_hidden_key = f"h_ten_{uuid.uuid4().hex[:6]}"
+    if "current_ins_hidden_key" not in st.session_state: st.session_state.current_ins_hidden_key = f"h_ins_{uuid.uuid4().hex[:6]}"
+
+    st.text_input("hidden_prop_click", key=st.session_state.current_prop_hidden_key, label_visibility="collapsed", on_change=handle_prop_action)
+    st.text_input("hidden_tenant_click", key=st.session_state.current_tenant_hidden_key, label_visibility="collapsed", on_change=handle_tenant_action)
+    st.text_input("hidden_ins_click", key=st.session_state.current_ins_hidden_key, label_visibility="collapsed", on_change=handle_ins_action)
 
     st.header("Μητρώο")
     st.caption("Διαχείριση και επισκόπηση του χαρτοφυλακίου ακινήτων, του πελατολογίου και των συμβολαίων.")
@@ -194,7 +165,7 @@ def show():
                 with col6: fixed_exp = st.text_input("Σταθερά Πάγια Έξοδα (Ετήσιο Budget σε €)", value="0")
 
                 st.subheader("Ημερολόγιο Εξόδων (Προαιρετικό)")
-                extra_months = st.multiselect("Επιλέξτε Μήνες που εκδίδονται Λογαριασμοί (π.χ. Νερό, Κοινόχρηστα)", options=list(MONTHS_DICT.keys()), format_func=lambda x: MONTHS_DICT[x])
+                extra_months = st.multiselect("Επιλέξτε Μήνες που εκδίδονται Λογαριασμοί", options=list(MONTHS_DICT.keys()), format_func=lambda x: MONTHS_DICT[x])
                 
                 st.subheader("Ιδιοκτήτες")
                 owner_data = []
@@ -244,7 +215,7 @@ def show():
                 st.subheader("Οικονομικά Στοιχεία & Έξοδα")
                 col5, col6 = st.columns(2)
                 with col5: e_prop_val = st.text_input("Αντικειμενική Αξία Ακινήτου (€)", value=str(sel_prop.get("Property_Value", "")).replace('.', ','))
-                with col6: e_fixed_exp = st.text_input("Σταθερά Πάγια Έξοδα (Ετήσιο Budget σε €)", value=str(sel_prop.get("Fixed_Yearly_Expenses", "")).replace('.', ','))
+                with col6: e_fixed_exp = st.text_input("Σταθερά Πάγια Έξοδα (Ετήσιο σε €)", value=str(sel_prop.get("Fixed_Yearly_Expenses", "")).replace('.', ','))
 
                 st.subheader("Ημερολόγιο Εξόδων (Προαιρετικό)")
                 sel_extra_raw = str(sel_prop.get("Extra_Bills_Months", ""))
@@ -324,20 +295,14 @@ def show():
                     p_id = str(prop.get("Property_ID", ""))
                     html_code += f"""
                             <tr>
-                                <td>{prop.get("Χαρακτηριστικό", "-")}</td>
+                                <td><strong>{prop.get("Χαρακτηριστικό", "-")}</strong></td>
                                 <td>{prop.get("Διεύθυνση", "")} {prop.get("Αριθμός", "")}</td>
                                 <td>{e_months_text if e_months_text else "-"}</td>
                                 <td>{" | ".join(owners_list) if owners_list else "Μη ορισμένο"}</td>
                                 <td><button class="action-btn" onclick="triggerPython('EDIT_{p_id}', 'hidden_prop_click')">✏️ Επεξ.</button></td>
                             </tr>
                     """
-                html_code += f"""
-                        </tbody>
-                    </table>
-                </div>
-                {COMMON_JS}
-                </body></html>
-                """
+                html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
                 components.html(html_code, height=580, scrolling=False)
                 
             if st.button("➕ Νέο Ακίνητο", type="primary", use_container_width=True):
@@ -415,10 +380,10 @@ def show():
                     <table id="tenant-table" class="custom-table">
                         <thead>
                             <tr>
-                                <th onclick="sortTable('tenant-table', 0)">Ονοματεπώνυμο ⇕</th>
-                                <th onclick="sortTable('tenant-table', 1)">ΑΦΜ ⇕</th>
-                                <th onclick="sortTable('tenant-table', 2)">Επικοινωνία ⇕</th>
-                                <th onclick="sortTable('tenant-table', 3)">Συνδεδεμένο Ακίνητο ⇕</th>
+                                <th onclick="sortTable('tenant-table', 0)">Ακίνητο ⇕</th>
+                                <th onclick="sortTable('tenant-table', 1)">Ονοματεπώνυμο ⇕</th>
+                                <th onclick="sortTable('tenant-table', 2)">ΑΦΜ ⇕</th>
+                                <th onclick="sortTable('tenant-table', 3)">Επικοινωνία ⇕</th>
                                 <th>Ενέργεια</th>
                             </tr>
                         </thead>
@@ -437,20 +402,14 @@ def show():
                         
                         html_code += f"""
                             <tr>
+                                <td><strong>{linked_prop_charact}</strong></td>
                                 <td>{str(tenant.get('Επώνυμο', ''))} {str(tenant.get('Όνομα', ''))}</td>
                                 <td>{str(tenant.get("ΑΦΜ", ""))}</td>
                                 <td>{str(tenant.get('Κινητό', ''))} | {str(tenant.get('Email', ''))}</td>
-                                <td>{linked_prop_charact}</td>
                                 <td><button class="action-btn" onclick="triggerPython('EDIT_{t_id}', 'hidden_tenant_click')">✏️ Επεξ.</button></td>
                             </tr>
                         """
-                html_code += f"""
-                        </tbody>
-                    </table>
-                </div>
-                {COMMON_JS}
-                </body></html>
-                """
+                html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
                 components.html(html_code, height=580, scrolling=False)
 
             if st.button("➕ Νέος Ενοικιαστής", type="primary", use_container_width=True):
@@ -574,7 +533,7 @@ def show():
                             <tr>
                                 <th onclick="sortTable('ins-table', 0)">Ακίνητο ⇕</th>
                                 <th onclick="sortTable('ins-table', 1)">Κατηγορία ⇕</th>
-                                <th onclick="sortTable('ins-table', 2)">Εταιρεία (Αρ. Συμβολαίου) ⇕</th>
+                                <th onclick="sortTable('ins-table', 2)">Εταιρεία (Συμβόλαιο) ⇕</th>
                                 <th onclick="sortTable('ins-table', 3)">Λήξη / Ανανέωση ⇕</th>
                                 <th onclick="sortTable('ins-table', 4)">Ασφάλιστρο ⇕</th>
                                 <th>Ενέργεια</th>
@@ -595,7 +554,7 @@ def show():
                     
                     html_code += f"""
                             <tr>
-                                <td>{p_charact}</td>
+                                <td><strong>{p_charact}</strong></td>
                                 <td>{str(ins.get("Category", ""))}</td>
                                 <td>{ins.get('Company', '')} ({ins.get('Contract_Number', '')})</td>
                                 <td>{str(ins.get("Renewal_Date", ""))}</td>
@@ -603,13 +562,7 @@ def show():
                                 <td><button class="action-btn" onclick="triggerPython('EDIT_{i_id}', 'hidden_ins_click')">✏️ Επεξ.</button></td>
                             </tr>
                     """
-                html_code += f"""
-                        </tbody>
-                    </table>
-                </div>
-                {COMMON_JS}
-                </body></html>
-                """
+                html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
                 components.html(html_code, height=580, scrolling=False)
 
             if st.button("➕ Νέο Ασφαλιστήριο", type="primary", use_container_width=True):
