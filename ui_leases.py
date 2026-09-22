@@ -8,26 +8,27 @@ import streamlit.components.v1 as components
 
 COMMON_CSS = """
 <style>
-    html, body { font-family: sans-serif; }
-    .table-container {
-        height: 550px;
-        overflow-y: auto;
-        overflow-x: auto;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
+    html, body { font-family: sans-serif; background-color: transparent; }
+    .table-container { 
+        max-height: 550px; overflow-y: auto; overflow-x: auto; 
+        border: 1px solid #ddd; border-radius: 8px; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; 
     }
-    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 950px; }
-    .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: top; }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 800px; }
+    .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
     .custom-table th:hover { background-color: #e2e6ea; }
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 150px; }
+    .custom-table th:first-child, .custom-table td:first-child { 
+        position: sticky; left: 0; z-index: 3; background-color: #ffffff; 
+        box-shadow: 1px 0 0 #ddd; font-weight: 600; 
+        min-width: 80px; max-width: 120px; 
+        white-space: normal !important; word-wrap: break-word; 
+    }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     
-    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 12px; font-weight: bold; transition: 0.2s; text-align: center; }
+    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 4px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 11px; font-weight: bold; transition: 0.2s; text-align: center; }
     .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
-    .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .status-badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; }
     .status-active { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     .status-expired { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
@@ -38,7 +39,7 @@ COMMON_CSS = """
         .custom-table th:hover { background-color: #383a45; }
         .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
-        .custom-table td { border-color: #444; }
+        .custom-table td { border-color: #444; color: white; }
         .action-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
         .action-btn:hover { background-color: #2a2e37; color: #fff; }
         .status-active { background-color: #155724; color: #d4edda; border-color: #155724; }
@@ -52,42 +53,25 @@ COMMON_JS = """
     function sortTable(tableId, n) {
         var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
         table = document.getElementById(tableId);
-        switching = true;
-        dir = "asc"; 
+        switching = true; dir = "asc"; 
         while (switching) {
-            switching = false;
-            rows = table.getElementsByTagName("TR");
+            switching = false; rows = table.getElementsByTagName("TR");
             for (i = 1; i < (rows.length - 1); i++) {
                 shouldSwitch = false;
-                x = rows[i].getElementsByTagName("TD")[n];
-                y = rows[i + 1].getElementsByTagName("TD")[n];
+                x = rows[i].getElementsByTagName("TD")[n]; y = rows[i + 1].getElementsByTagName("TD")[n];
                 if(!x || !y) continue;
-                
-                let valX = x.innerText.trim().toLowerCase();
-                let valY = y.innerText.trim().toLowerCase();
-                
+                let valX = x.innerText.trim().toLowerCase(); let valY = y.innerText.trim().toLowerCase();
                 if(valX.includes('€')) valX = parseFloat(valX.replace(/[^0-9,-]/g, '').replace(',', '.'));
                 if(valY.includes('€')) valY = parseFloat(valY.replace(/[^0-9,-]/g, '').replace(',', '.'));
-                
                 if(valX.match(/^\\d{4}-\\d{2}-\\d{2}/)) valX = new Date(valX).getTime();
                 if(valY.match(/^\\d{4}-\\d{2}-\\d{2}/)) valY = new Date(valY).getTime();
-                
-                if (dir == "asc") {
-                    if (valX > valY) { shouldSwitch = true; break; }
-                } else if (dir == "desc") {
-                    if (valX < valY) { shouldSwitch = true; break; }
-                }
+                if (dir == "asc") { if (valX > valY) { shouldSwitch = true; break; } } 
+                else if (dir == "desc") { if (valX < valY) { shouldSwitch = true; break; } }
             }
-            if (shouldSwitch) {
-                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                switching = true;
-                switchcount ++;      
-            } else {
-                if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
-            }
+            if (shouldSwitch) { rows[i].parentNode.insertBefore(rows[i + 1], rows[i]); switching = true; switchcount ++; } 
+            else { if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; } }
         }
     }
-
     (function hideInput() {
         var pDoc = window.parent.document;
         var inputs = pDoc.querySelectorAll('input[aria-label="hidden_lease_click"]');
@@ -98,7 +82,6 @@ COMMON_JS = """
             });
         } else { setTimeout(hideInput, 100); }
     })();
-
     function triggerPython(action_val) {
         var payload = action_val + '|' + Date.now();
         var pDoc = window.parent.document;
@@ -156,9 +139,6 @@ def show():
 
     st.header("Διαχείριση Μισθώσεων")
 
-    # =========================================================================
-    # ΚΑΤΑΣΤΑΣΗ 1: ΝΕΑ ΜΙΣΘΩΣΗ (ΦΟΡΜΑ)
-    # =========================================================================
     if st.session_state.lease_action == 'new':
         st.markdown("### ➕ Προσθήκη Νέας Μίσθωσης")
         col_back, _ = st.columns([1, 4])
@@ -201,9 +181,6 @@ def show():
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
 
-    # =========================================================================
-    # ΚΑΤΑΣΤΑΣΗ 2: ΕΠΕΞΕΡΓΑΣΙΑ ΜΙΣΘΩΣΗΣ (ΦΟΡΜΑ)
-    # =========================================================================
     elif st.session_state.lease_action == 'edit':
         st.markdown("### ✏️ Επεξεργασία Μίσθωσης")
         col_back, _ = st.columns([1, 4])
@@ -268,9 +245,6 @@ def show():
                     st.rerun()
                 except Exception as e: st.error(f"Σφάλμα επεξεργασίας: {e}")
 
-    # =========================================================================
-    # ΚΑΤΑΣΤΑΣΗ 3: ΙΣΤΟΡΙΚΟ ΟΛΩΝ ΤΩΝ ΜΙΣΘΩΣΕΩΝ (ΛΙΣΤΑ ΜΕ ΦΙΛΤΡΑ)
-    # =========================================================================
     else:
         st.caption("Ιστορικό Όλων των Μισθώσεων")
         if leases_df.empty: 
@@ -278,7 +252,6 @@ def show():
         else:
             fc1, fc2, fc3 = st.columns(3)
             
-            # Φίλτρο 1: Έτος (Ενεργό μέσα στο έτος)
             all_years = set()
             for _, r in leases_df.iterrows():
                 try: 
@@ -289,11 +262,9 @@ def show():
             sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
             sel_year = fc1.selectbox("Επιλογή Έτους (Ενεργή)", sorted_years, key="filter_lease_year")
 
-            # Φίλτρο 2: Ακίνητο
             all_props = ["Όλα τα ακίνητα"] + [prop_options[k] for k in prop_options.keys()]
             sel_prop = fc2.selectbox("Ακίνητο", all_props, key="filter_lease_prop")
             
-            # Φίλτρο 3: Κατάσταση
             sel_status = fc3.selectbox("Κατάσταση", ["Όλες", "Ενεργές", "Ληγμένες"], key="filter_lease_status")
 
             st.write("") 
@@ -305,7 +276,6 @@ def show():
                 p_id = str(r.get("Property_ID", ""))
                 p_name = prop_options.get(p_id, "-")
                 
-                # Φίλτρο Ακινήτου
                 if sel_prop != "Όλα τα ακίνητα" and p_name != sel_prop: continue
                 
                 t_names = []
@@ -320,12 +290,10 @@ def show():
                 try: e_d = datetime.strptime(e_date_str, "%Y-%m-%d").date()
                 except: e_d = date(2099, 12, 31)
                 
-                # Φίλτρο Έτους
                 if sel_year != "Όλα τα έτη":
                     y_int = int(sel_year)
                     if not (s_d.year <= y_int <= e_d.year): continue
                 
-                # Φίλτρο Κατάστασης
                 is_active = e_d >= today
                 if sel_status == "Ενεργές" and not is_active: continue
                 if sel_status == "Ληγμένες" and is_active: continue
@@ -334,8 +302,6 @@ def show():
 
                 rent = pd.to_numeric(str(r.get('Monthly_Rent', '0')).replace(',', '.'), errors='coerce')
                 rent_disp = f"{rent:.2f} €".replace('.', ',') if pd.notna(rent) else "0,00 €"
-                
-                adj = str(r.get("Adjustment_Terms", "")).replace('nan', '')
                 
                 lease_list.append({
                     "Lease_ID": str(r.get("Lease_ID", "")),
@@ -386,7 +352,7 @@ def show():
                 {COMMON_JS}
                 </body></html>
                 """
-                t_height = min(600, 150 + len(lease_list) * 55)
+                t_height = min(600, 70 + len(lease_list) * 55)
                 components.html(html_code, height=t_height, scrolling=False)
 
         st.write("")
