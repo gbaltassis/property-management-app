@@ -10,32 +10,15 @@ import streamlit.components.v1 as components
 COMMON_CSS = """
 <style>
     html, body { font-family: sans-serif; }
-    .table-container {
-        height: 550px;
-        overflow-y: auto;
-        overflow-x: auto;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-    }
-    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 900px; }
-    .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: top; }
+    .table-container { height: 550px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 600px; }
+    .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
     .custom-table th:hover { background-color: #e2e6ea; }
-    
-    /* ΑΛΛΑΓΗ ΓΙΑ ΚΙΝΗΤΑ: Μικρότερο πλάτος και αναδίπλωση στην 1η στήλη */
-    .custom-table th:first-child, .custom-table td:first-child { 
-        position: sticky; left: 0; z-index: 3; background-color: #ffffff; 
-        box-shadow: 1px 0 0 #ddd; font-weight: 600; 
-        min-width: 120px; max-width: 150px; 
-        white-space: normal !important; word-wrap: break-word; 
-    }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 90px; max-width: 140px; white-space: normal !important; word-wrap: break-word; }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
-    
-    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 12px; font-weight: bold; transition: 0.2s; }
+    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 4px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 11px; font-weight: bold; transition: 0.2s; text-align: center; }
     .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
-
     @media (prefers-color-scheme: dark) {
         .table-container { border-color: #444; }
         .custom-table { background: #0e1117; color: white; }
@@ -45,7 +28,6 @@ COMMON_CSS = """
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
         .custom-table td { border-color: #444; }
         .action-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
-        .action-btn:hover { background-color: #2a2e37; color: #fff; }
     }
 </style>
 """
