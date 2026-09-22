@@ -46,6 +46,7 @@ def show():
         st.markdown("---")
         
         with st.form("new_expense_form", clear_on_submit=True):
+            # Δυναμικά πεδία ανάλογα την επιλογή
             afm_sel, prop_sel = "", ""
             if category == "ΕΝΦΙΑ":
                 afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", list(owner_afms)) if owner_afms else st.text_input("ΑΦΜ Ιδιοκτήτη *")
@@ -119,16 +120,14 @@ def show():
     with tab_edit:
         if expenses_df.empty: st.warning("Δεν υπάρχουν έξοδα.")
         else:
-           e_opts = {}
+            e_opts = {}
             for _, r in expenses_df.iterrows():
-                exp_id = str(r.get("Expense_ID", ""))
-                cat = str(r.get("Category", ""))
-                date_paid = str(r.get("Date_Paid", ""))
+                exp_id_val = str(r.get("Expense_ID", ""))
+                cat_val = str(r.get("Category", ""))
+                date_paid_val = str(r.get("Date_Paid", ""))
+                target_val = str(r.get("AFM", "")) if cat_val == "ΕΝΦΙΑ" else prop_options.get(str(r.get("Property_ID", "")), "-")
+                e_opts[exp_id_val] = f"{date_paid_val} | {cat_val} | {target_val}"
                 
-                # Έλεγχος: Αν είναι ΕΝΦΙΑ δείχνει το ΑΦΜ (Ιδιοκτήτη), αλλιώς δείχνει το Ακίνητο
-                target = str(r.get("AFM", "")) if cat == "ΕΝΦΙΑ" else prop_options.get(str(r.get("Property_ID", "")), "-")
-                
-                e_opts[exp_id] = f"{date_paid} | {cat} | {target}"
             sel_exp = st.selectbox("Επιλέξτε Έξοδο προς επεξεργασία", options=list(e_opts.keys()), format_func=lambda x: e_opts[x])
             
             if sel_exp:
@@ -175,11 +174,11 @@ def show():
                         
                         try: r_date = datetime.strptime(str(sel_row.get("Renewal_Date", "")), "%Y-%m-%d").date()
                         except: r_date = date.today()
-                        with sc2: ren_date = st.date_input("Ημ/νία Ανανέωσης (Επόμενη) *", value=r_date)
+                        with sc3: ren_date = st.date_input("Ημ/νία Ανανέωσης (Επόμενη) *", value=r_date)
                         
                         dur_opts = ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"]
                         curr_dur = str(sel_row.get("Duration_Months", ""))
-                        with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", dur_opts, index=dur_opts.index(curr_dur) if curr_dur in dur_opts else 0)
+                        with sc4: dur = st.selectbox("Διάρκεια Συμβολαίου", dur_opts, index=dur_opts.index(curr_dur) if curr_dur in dur_opts else 0)
                         
                         if e_category == "Ασφάλιση Πυρός":
                             st.write("**Ασφαλισμένα Κεφάλαια**")
