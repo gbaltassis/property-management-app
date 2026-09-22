@@ -11,13 +11,22 @@ MONTHS_DICT = {1:"Ιανουάριος", 2:"Φεβρουάριος", 3:"Μάρτ
 
 COMMON_CSS = """
 <style>
-    html, body { font-family: sans-serif; }
-    .table-container { height: 550px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    html, body { font-family: sans-serif; background-color: transparent; }
+    .table-container { 
+        max-height: 550px; overflow-y: auto; overflow-x: auto; 
+        border: 1px solid #ddd; border-radius: 8px; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; 
+    }
     .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 600px; }
     .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
     .custom-table th:hover { background-color: #e2e6ea; }
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 90px; max-width: 140px; white-space: normal !important; word-wrap: break-word; }
+    .custom-table th:first-child, .custom-table td:first-child { 
+        position: sticky; left: 0; z-index: 3; background-color: #ffffff; 
+        box-shadow: 1px 0 0 #ddd; font-weight: 600; 
+        min-width: 80px; max-width: 120px; 
+        white-space: normal !important; word-wrap: break-word; 
+    }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 4px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 11px; font-weight: bold; transition: 0.2s; text-align: center; }
     .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
@@ -28,7 +37,7 @@ COMMON_CSS = """
         .custom-table th:hover { background-color: #383a45; }
         .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
-        .custom-table td { border-color: #444; }
+        .custom-table td { border-color: #444; color: white;}
         .action-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
     }
 </style>
@@ -271,8 +280,8 @@ def show():
                             <tr>
                                 <th onclick="sortTable('prop-table', 0)">Χαρακτηριστικό ⇕</th>
                                 <th onclick="sortTable('prop-table', 1)">Διεύθυνση ⇕</th>
-                                <th onclick="sortTable('prop-table', 2)">Μήνες Λογαριασμών ⇕</th>
-                                <th onclick="sortTable('prop-table', 3)">Ιδιοκτησιακό Καθεστώς ⇕</th>
+                                <th onclick="sortTable('prop-table', 2)">Λογαριασμοί ⇕</th>
+                                <th onclick="sortTable('prop-table', 3)">Ιδιοκτησία ⇕</th>
                                 <th>Ενέργεια</th>
                             </tr>
                         </thead>
@@ -290,7 +299,7 @@ def show():
                             owners_list.append(f"{n} {s} ({r} {p_display}%)")
                     
                     e_months_raw = str(prop.get("Extra_Bills_Months", ""))
-                    e_months_text = ", ".join([MONTHS_DICT[int(m)] for m in e_months_raw.split(',') if m.strip().isdigit()])
+                    e_months_text = ", ".join([MONTHS_DICT[int(m)][:3] for m in e_months_raw.split(',') if m.strip().isdigit()])
                     
                     p_id = str(prop.get("Property_ID", ""))
                     html_code += f"""
@@ -303,7 +312,8 @@ def show():
                             </tr>
                     """
                 html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                components.html(html_code, height=580, scrolling=False)
+                t_height = min(600, 70 + len(properties_df) * 45)
+                components.html(html_code, height=t_height, scrolling=False)
                 
             if st.button("➕ Νέο Ακίνητο", type="primary", use_container_width=True):
                 st.session_state.prop_action = 'new'
@@ -410,7 +420,8 @@ def show():
                             </tr>
                         """
                 html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                components.html(html_code, height=580, scrolling=False)
+                t_height = min(600, 70 + len(tenants_df) * 45)
+                components.html(html_code, height=t_height, scrolling=False)
 
             if st.button("➕ Νέος Ενοικιαστής", type="primary", use_container_width=True):
                 st.session_state.tenant_action = 'new'
@@ -533,8 +544,8 @@ def show():
                             <tr>
                                 <th onclick="sortTable('ins-table', 0)">Ακίνητο ⇕</th>
                                 <th onclick="sortTable('ins-table', 1)">Κατηγορία ⇕</th>
-                                <th onclick="sortTable('ins-table', 2)">Εταιρεία (Συμβόλαιο) ⇕</th>
-                                <th onclick="sortTable('ins-table', 3)">Λήξη / Ανανέωση ⇕</th>
+                                <th onclick="sortTable('ins-table', 2)">Εταιρεία ⇕</th>
+                                <th onclick="sortTable('ins-table', 3)">Λήξη ⇕</th>
                                 <th onclick="sortTable('ins-table', 4)">Ασφάλιστρο ⇕</th>
                                 <th>Ενέργεια</th>
                             </tr>
@@ -563,7 +574,8 @@ def show():
                             </tr>
                     """
                 html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                components.html(html_code, height=580, scrolling=False)
+                t_height = min(600, 70 + len(insurances_df) * 45)
+                components.html(html_code, height=t_height, scrolling=False)
 
             if st.button("➕ Νέο Ασφαλιστήριο", type="primary", use_container_width=True):
                 st.session_state.ins_action = 'new'
