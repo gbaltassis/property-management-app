@@ -46,7 +46,6 @@ def show():
         st.markdown("---")
         
         with st.form("new_expense_form", clear_on_submit=True):
-            # Δυναμικά πεδία ανάλογα την επιλογή
             afm_sel, prop_sel = "", ""
             if category == "ΕΝΦΙΑ":
                 afm_sel = st.selectbox("Ιδιοκτήτης (ΑΦΜ) *", list(owner_afms)) if owner_afms else st.text_input("ΑΦΜ Ιδιοκτήτη *")
@@ -57,10 +56,11 @@ def show():
             with ec1: amount = st.text_input("Ποσό (€) *", value="0")
             with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=date.today())
 
-            desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
+            desc, detailed_desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", "", ""
             
             if category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
-                desc = st.text_area("Περιγραφή (π.χ. Υδραυλικός, Διαρροή) *")
+                desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *")
+                detailed_desc = st.text_area("Αναλυτική Περιγραφή (π.χ. Τι ακριβώς επισκευάστηκε)")
             
             if "Ασφάλιση" in category:
                 sc1, sc2, sc3, sc4 = st.columns(4)
@@ -84,7 +84,7 @@ def show():
                     final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
                     r_date_str = ren_date.strftime("%Y-%m-%d") if ren_date else ""
                     
-                    row = [exp_id, category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num]
+                    row = [exp_id, category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num, detailed_desc]
                     try:
                         gsheets_service.add_expense(row)
                         st.success("Το έξοδο καταχωρήθηκε επιτυχώς!")
@@ -109,9 +109,13 @@ def show():
                     contract = str(r.get('Contract_Number', '')).replace('nan', '')
                     ren_date = str(r.get('Renewal_Date', '')).replace('nan', '')
                     
-                    details = f"{ins_comp}"
+                    details = f"<b>{ins_comp}</b>"
                     if contract: details += f" (Συμβ: {contract})"
-                    if ren_date: details += f" - Ανανέωση: {ren_date}"
+                    if ren_date: details += f"<br><span style='font-size: 12px; color: #555;'>Ανανέωση: {ren_date}</span>"
+                elif cat in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
+                    det_desc = str(r.get("Detailed_Description", "")).replace('nan', '')
+                    if det_desc:
+                        details = f"<b>{details}</b><br><span style='font-size: 12px; color: #555;'>{det_desc}</span>"
                 
                 exp_list.append({
                     "Ημερομηνία": str(r.get("Date_Paid", "")),
@@ -137,9 +141,11 @@ def show():
                 extra_info = ""
                 if "Ασφάλιση" in cat_val:
                     contract = str(r.get("Contract_Number", "")).replace('nan', '')
-                    if contract: extra_info = f" | Αρ. Συμβ: {contract}"
+                    if contract: extra_info = f" | Συμβ: {contract}"
                 elif cat_val in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
                     desc = str(r.get("Description", "")).replace('nan', '')
+                    det_desc = str(r.get("Detailed_Description", "")).replace('nan', '')
+                    if det_desc: desc = f"{desc} ({det_desc})"
                     if desc: extra_info = f" | {desc[:40] + '...' if len(desc) > 40 else desc}"
                 
                 e_opts[exp_id_val] = f"{date_paid_val} | {cat_val} | {target_val}{extra_info}"
@@ -151,7 +157,9 @@ def show():
                 
                 cat_opts = ["ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
                 curr_cat = str(sel_row.get("Category", ""))
-                e_category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, index=cat_opts.index(curr_cat) if curr_cat in cat_opts else 0, key="edit_exp_cat")
+                
+                # ΛΥΣΗ ΣΤΗΝ ΚΑΤΗΓΟΡΙΑ: Δυναμικό κλειδί (key) βάσει του ID της εγγραφής!
+                e_category = st.selectbox("Κατηγορία Εξόδου *", cat_opts, index=cat_opts.index(curr_cat) if curr_cat in cat_opts else 0, key=f"edit_exp_cat_{sel_exp}")
                 
                 st.markdown("---")
                 
@@ -178,10 +186,11 @@ def show():
                     except: pay_date = date.today()
                     with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=pay_date)
 
-                    desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
+                    desc, detailed_desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", "", ""
                     
                     if e_category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
-                        desc = st.text_area("Περιγραφή (π.χ. Υδραυλικός, Διαρροή) *", value=str(sel_row.get("Description", "")).replace('nan',''))
+                        desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *", value=str(sel_row.get("Description", "")).replace('nan',''))
+                        detailed_desc = st.text_area("Αναλυτική Περιγραφή", value=str(sel_row.get("Detailed_Description", "")).replace('nan',''))
                     
                     if "Ασφάλιση" in e_category:
                         sc1, sc2, sc3, sc4 = st.columns(4)
@@ -218,7 +227,7 @@ def show():
                     else:
                         final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
                         r_date_str = ren_date.strftime("%Y-%m-%d") if ren_date else ""
-                        new_row = [sel_exp, e_category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num]
+                        new_row = [sel_exp, e_category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num, detailed_desc]
                         try:
                             gsheets_service.update_expense(sel_exp, new_row)
                             st.success("Οι αλλαγές αποθηκεύτηκαν!")
