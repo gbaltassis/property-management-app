@@ -53,13 +53,11 @@ def handle_expense_action():
         st.session_state.hidden_exp_click_val = ""
 
 def show():
-    # Setup State Routing (SPA Logic)
     if "expense_action" not in st.session_state:
         st.session_state.expense_action = None
     if "action_exp_id" not in st.session_state:
         st.session_state.action_exp_id = None
 
-    # Το κρυφό πεδίο για να πιάνουμε τα κλικς από τη Javascript
     st.text_input("hidden_exp_click", key="hidden_exp_click_val", label_visibility="collapsed", on_change=handle_expense_action)
     
     st.markdown(COMMON_CSS, unsafe_allow_html=True)
@@ -71,7 +69,6 @@ def show():
         st.error(f"Αδυναμία φόρτωσης δεδομένων: {e}")
         return
 
-    # Συγκέντρωση ΑΦΜ και Ακινήτων
     owner_afms = set()
     prop_options = {}
     if not properties_df.empty:
@@ -138,22 +135,17 @@ def show():
                 with ec1: amount = st.text_input("Ποσό (€) *", value="0")
                 with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=date.today())
 
-            desc, detailed_desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", "", ""
+            desc, detailed_desc, ins_comp, contract_num, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
             
             if category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
                 desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *")
                 detailed_desc = st.text_area("Αναλυτική Περιγραφή (π.χ. Τι ακριβώς επισκευάστηκε)")
             
             if "Ασφάλιση" in category:
-                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1, sc2, sc3 = st.columns(3)
                 with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *")
                 with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου")
-                with sc3: ren_date = st.date_input("Ημ/νία Ανανέωσης (Επόμενη) *")
-                with sc4: dur = st.selectbox("Διάρκεια Συμβολαίου", ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"])
-                if category == "Ασφάλιση Πυρός":
-                    bc1, bc2 = st.columns(2)
-                    with bc1: ins_build = st.text_input("Κεφάλαιο Κτιρίου (€)", value="0")
-                    with bc2: ins_cont = st.text_input("Κεφάλαιο Περιεχομένου (€)", value="0")
+                with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"])
 
             if st.form_submit_button("Αποθήκευση Εξόδου", type="primary", use_container_width=True):
                 enfia_breakdown_str = "{}"
@@ -165,6 +157,7 @@ def show():
                         if pd.isna(num): num = 0.0
                         clean_dict[pid] = num
                         total_main += num
+                    
                     s_val = pd.to_numeric(enfia_sur.replace(',', '.'), errors='coerce')
                     if pd.isna(s_val): s_val = 0.0
                     amt_val = total_main + s_val
@@ -174,11 +167,11 @@ def show():
                     amt_val = pd.to_numeric(amount.replace(',', '.'), errors='coerce')
 
                 if pd.isna(amt_val) or amt_val <= 0:
-                    st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
+                    st.warning("Παρακαλώ εισάγετε έγκυρο ποσό (ή ελέγξτε τα ποσά του ΕΝΦΙΑ).")
                 else:
                     exp_id = f"EXP-{uuid.uuid4().hex[:6].upper()}"
                     final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
-                    r_date_str = ren_date.strftime("%Y-%m-%d") if ren_date else ""
+                    r_date_str = "" # Το πεδίο παραμένει κενό για να μη χαλάσει η δομή του Google Sheet
                     
                     row = [exp_id, category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num, detailed_desc, enfia_breakdown_str, enfia_sur]
                     try:
@@ -264,26 +257,19 @@ def show():
                 with ec1: amount = st.text_input("Ποσό (€) *", value=str(sel_row.get("Amount", "")).replace('.', ','))
                 with ec2: date_paid = st.date_input("Ημ/νία Πληρωμής *", value=pay_date)
 
-            desc, detailed_desc, ins_comp, contract_num, ren_date, dur, ins_build, ins_cont = "", "", "", "", "", "", "", ""
+            desc, detailed_desc, ins_comp, contract_num, dur, ins_build, ins_cont = "", "", "", "", "", "", ""
             
             if e_category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
                 desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *", value=str(sel_row.get("Description", "")).replace('nan',''))
                 detailed_desc = st.text_area("Αναλυτική Περιγραφή", value=str(sel_row.get("Detailed_Description", "")).replace('nan',''))
             
             if "Ασφάλιση" in e_category:
-                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1, sc2, sc3 = st.columns(3)
                 with sc1: ins_comp = st.text_input("Ασφαλιστική Εταιρεία *", value=str(sel_row.get("Insurance_Company", "")).replace('nan',''))
                 with sc2: contract_num = st.text_input("Αριθμός Συμβολαίου", value=str(sel_row.get("Contract_Number", "")).replace('nan',''))
-                try: r_date = datetime.strptime(str(sel_row.get("Renewal_Date", "")), "%Y-%m-%d").date()
-                except: r_date = date.today()
-                with sc3: ren_date = st.date_input("Ημ/νία Ανανέωσης (Επόμενη) *", value=r_date)
                 dur_opts = ["Ετήσιο", "Εξάμηνο", "Τρίμηνο", "Άλλο"]
                 curr_dur = str(sel_row.get("Duration_Months", ""))
-                with sc4: dur = st.selectbox("Διάρκεια Συμβολαίου", dur_opts, index=dur_opts.index(curr_dur) if curr_dur in dur_opts else 0)
-                if e_category == "Ασφάλιση Πυρός":
-                    bc1, bc2 = st.columns(2)
-                    with bc1: ins_build = st.text_input("Κεφάλαιο Κτιρίου (€)", value=str(sel_row.get("Insured_Building", "")).replace('.', ','))
-                    with bc2: ins_cont = st.text_input("Κεφάλαιο Περιεχομένου (€)", value=str(sel_row.get("Insured_Contents", "")).replace('.', ','))
+                with sc3: dur = st.selectbox("Διάρκεια Συμβολαίου", dur_opts, index=dur_opts.index(curr_dur) if curr_dur in dur_opts else 0)
 
             upd_btn = st.form_submit_button("Αποθήκευση Αλλαγών", type="primary", use_container_width=True)
             
@@ -318,7 +304,8 @@ def show():
                 st.warning("Παρακαλώ εισάγετε έγκυρο ποσό.")
             else:
                 final_afm = afm_sel.split(" - ")[0] if " - " in afm_sel else afm_sel
-                r_date_str = ren_date.strftime("%Y-%m-%d") if ren_date else ""
+                r_date_str = "" # Το πεδίο παραμένει κενό για να μη χαλάσει η δομή του Google Sheet
+                
                 new_row = [sel_exp, e_category, prop_sel, final_afm, amount, date_paid.strftime("%Y-%m-%d"), desc, ins_comp, r_date_str, dur, ins_build, ins_cont, contract_num, detailed_desc, enfia_breakdown_str, enfia_sur]
                 try:
                     gsheets_service.update_expense(sel_exp, new_row)
@@ -339,7 +326,6 @@ def show():
         else:
             fc1, fc2 = st.columns(2)
             
-            # Φίλτρο Έτους
             all_years = set()
             for _, r in expenses_df.iterrows():
                 try: 
@@ -349,11 +335,10 @@ def show():
             sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
             sel_year = fc1.selectbox("Επιλογή Έτους", sorted_years)
 
-            # Φίλτρο Κατηγορίας
             all_cats = ["Όλες οι κατηγορίες", "ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
             sel_cat = fc2.selectbox("Κατηγορία", all_cats)
             
-            st.write("") # Κενό
+            st.write("") 
 
             exp_list = []
             for _, r in expenses_df.iterrows():
@@ -374,10 +359,8 @@ def show():
                 if "Ασφάλιση" in cat:
                     ins_comp = str(r.get('Insurance_Company', '')).replace('nan', '')
                     contract = str(r.get('Contract_Number', '')).replace('nan', '')
-                    ren_date = str(r.get('Renewal_Date', '')).replace('nan', '')
                     details = f"<b>{ins_comp}</b>"
                     if contract: details += f" (Συμβ: {contract})"
-                    if ren_date: details += f"<br><span style='font-size: 11px; color: #555;'>Ανανέωση: {ren_date}</span>"
                 elif cat == "ΕΝΦΙΑ":
                     e_s = pd.to_numeric(str(r.get('ENFIA_Surcharge', '0')).replace(',', '.'), errors='coerce')
                     details = f"Αναλυτικός Φόρος<br><span style='font-size: 11px; color: #555;'>(Προσ/ξηση: {e_s:.2f}€)</span>"
@@ -460,7 +443,6 @@ def show():
                 </body>
                 </html>
                 """
-                # Υπολογισμός ύψους iframe βάσει πλήθους εγγραφών
                 t_height = min(600, 150 + len(exp_list) * 55)
                 components.html(html_code, height=t_height, scrolling=False)
 
