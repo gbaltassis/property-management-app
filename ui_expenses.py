@@ -103,8 +103,15 @@ def show():
                 cat = str(r.get("Category", ""))
                 target = str(r.get("AFM", "")) if cat == "ΕΝΦΙΑ" else prop_options.get(str(r.get("Property_ID", "")), "-")
                 
-                details = str(r.get("Description", ""))
-                if "Ασφάλιση" in cat: details = f"{r.get('Insurance_Company', '')} (Ανανέωση: {r.get('Renewal_Date', '')})"
+               details = str(r.get("Description", "")).replace('nan', '')
+                if "Ασφάλιση" in cat:
+                    ins_comp = str(r.get('Insurance_Company', '')).replace('nan', '')
+                    contract = str(r.get('Contract_Number', '')).replace('nan', '')
+                    ren_date = str(r.get('Renewal_Date', '')).replace('nan', '')
+                    
+                    details = f"{ins_comp}"
+                    if contract: details += f" (Συμβ: {contract})"
+                    if ren_date: details += f" - Ανανέωση: {ren_date}"
                 
                 exp_list.append({
                     "Ημερομηνία": str(r.get("Date_Paid", "")),
@@ -126,7 +133,17 @@ def show():
                 cat_val = str(r.get("Category", ""))
                 date_paid_val = str(r.get("Date_Paid", ""))
                 target_val = str(r.get("AFM", "")) if cat_val == "ΕΝΦΙΑ" else prop_options.get(str(r.get("Property_ID", "")), "-")
-                e_opts[exp_id_val] = f"{date_paid_val} | {cat_val} | {target_val}"
+                
+                extra_info = ""
+                if "Ασφάλιση" in cat_val:
+                    contract = str(r.get("Contract_Number", "")).replace('nan', '')
+                    if contract: extra_info = f" | Αρ. Συμβ: {contract}"
+                elif cat_val in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
+                    desc = str(r.get("Description", "")).replace('nan', '')
+                    # Κόβουμε την περιγραφή στους 40 χαρακτήρες για να μη χαλάσει το πλάτος της λίστας
+                    if desc: extra_info = f" | {desc[:40] + '...' if len(desc) > 40 else desc}"
+                
+                e_opts[exp_id_val] = f"{date_paid_val} | {cat_val} | {target_val}{extra_info}"
                 
             sel_exp = st.selectbox("Επιλέξτε Έξοδο προς επεξεργασία", options=list(e_opts.keys()), format_func=lambda x: e_opts[x])
             
