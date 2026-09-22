@@ -30,6 +30,11 @@ COMMON_CSS = """
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 4px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 11px; font-weight: bold; transition: 0.2s; text-align: center; }
     .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
+    
+    .status-badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; }
+    .status-active { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .status-expired { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
     @media (prefers-color-scheme: dark) {
         .table-container { border-color: #444; }
         .custom-table { background: #0e1117; color: white; }
@@ -39,6 +44,8 @@ COMMON_CSS = """
         .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
         .custom-table td { border-color: #444; color: white;}
         .action-btn { background-color: #1e2127; border-color: #444; color: #ddd; }
+        .status-active { background-color: #155724; color: #d4edda; border-color: #155724; }
+        .status-expired { background-color: #721c24; color: #f8d7da; border-color: #721c24; }
     }
 </style>
 """
@@ -533,26 +540,52 @@ def show():
                 else: st.warning("Συμπληρώστε υποχρεωτικά την Εταιρεία και τον Αριθμό Συμβολαίου.")
 
         else:
+            st.subheader("Ιστορικό Ασφαλιστηρίων Συμβολαίων")
+            
             if insurances_df.empty: 
                 st.info("Δεν υπάρχουν καταχωρημένα ασφαλιστήρια συμβόλαια.")
             else:
-                html_code = f"""
-                <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
-                <div class="table-container">
-                    <table id="ins-table" class="custom-table">
-                        <thead>
-                            <tr>
-                                <th onclick="sortTable('ins-table', 0)">Ακίνητο ⇕</th>
-                                <th onclick="sortTable('ins-table', 1)">Κατηγορία ⇕</th>
-                                <th onclick="sortTable('ins-table', 2)">Εταιρεία ⇕</th>
-                                <th onclick="sortTable('ins-table', 3)">Λήξη ⇕</th>
-                                <th onclick="sortTable('ins-table', 4)">Ασφάλιστρο ⇕</th>
-                                <th>Ενέργεια</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                """
+                fc1, fc2, fc3 = st.columns(3)
+                
+                all_years = set()
+                for _, r in insurances_df.iterrows():
+                    try: 
+                        d = datetime.strptime(str(r.get("Renewal_Date", "")), "%Y-%m-%d").date()
+                        all_years.add(str(d.year))
+                    except: pass
+                sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
+                sel_year = fc1.selectbox("Έτος Ανανέωσης", sorted_years, key="filter_ins_year")
+                
+                all_cats = ["Όλες οι κατηγορίες", "Ασφάλιση Πυρός / Σεισμού", "Αστική Ευθύνη", "Νομική Προστασία", "Άλλο"]
+                sel_cat = fc2.selectbox("Κατηγορία", all_cats, key="filter_ins_cat")
+                
+                sel_status = fc3.selectbox("Κατάσταση", ["Όλα", "Ενεργά", "Ληγμένα"], key="filter_ins_status")
+                
+                st.write("")
+                
+                ins_list = []
+                today = date.today()
+                
                 for _, ins in insurances_df.iterrows():
+                    cat = str(ins.get("Category", ""))
+                    if sel_cat != "Όλες οι κατηγορίες" and cat != sel_cat: continue
+                    
+                    raw_date = str(ins.get("Renewal_Date", ""))
+                    try: 
+                        ren_d = datetime.strptime(raw_date, "%Y-%m-%d").date()
+                        row_year = str(ren_d.year)
+                    except: 
+                        ren_d = date(1900, 1, 1)
+                        row_year = ""
+                    
+                    if sel_year != "Όλα τα έτη" and row_year != sel_year: continue
+                    
+                    is_active = ren_d >= today
+                    if sel_status == "Ενεργά" and not is_active: continue
+                    if sel_status == "Ληγμένα" and is_active: continue
+                    
+                    status_html = "<span class='status-badge status-active'>Ενεργό</span>" if is_active else "<span class='status-badge status-expired'>Ληγμένο</span>"
+                    
                     i_id = str(ins.get("Insurance_ID", ""))
                     p_id = str(ins.get("Property_ID", ""))
                     p_charact = "-"
@@ -563,20 +596,53 @@ def show():
                     prem = pd.to_numeric(str(ins.get('Premium', '0')).replace(',', '.'), errors='coerce')
                     prem_txt = f"{prem:.2f} €".replace('.', ',') if pd.notna(prem) and prem > 0 else "-"
                     
-                    html_code += f"""
-                            <tr>
-                                <td><strong>{p_charact}</strong></td>
-                                <td>{str(ins.get("Category", ""))}</td>
-                                <td>{ins.get('Company', '')} ({ins.get('Contract_Number', '')})</td>
-                                <td>{str(ins.get("Renewal_Date", ""))}</td>
-                                <td><strong>{prem_txt}</strong></td>
-                                <td><button class="action-btn" onclick="triggerPython('EDIT_{i_id}', 'hidden_ins_click')">✏️ Επεξ.</button></td>
-                            </tr>
+                    ins_list.append({
+                        "ID": i_id,
+                        "Ακίνητο": p_charact,
+                        "Κατηγορία": cat,
+                        "Εταιρεία": f"{ins.get('Company', '')} ({ins.get('Contract_Number', '')})",
+                        "Λήξη": raw_date,
+                        "Ασφάλιστρο": prem_txt,
+                        "Κατάσταση": status_html
+                    })
+                
+                if not ins_list:
+                    st.info("Δεν βρέθηκαν εγγραφές με τα επιλεγμένα κριτήρια.")
+                else:
+                    html_code = f"""
+                    <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
+                    <div class="table-container">
+                        <table id="ins-table" class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortTable('ins-table', 0)">Ακίνητο ⇕</th>
+                                    <th onclick="sortTable('ins-table', 1)">Κατηγορία ⇕</th>
+                                    <th onclick="sortTable('ins-table', 2)">Εταιρεία ⇕</th>
+                                    <th onclick="sortTable('ins-table', 3)">Λήξη ⇕</th>
+                                    <th onclick="sortTable('ins-table', 4)">Ασφάλιστρο ⇕</th>
+                                    <th onclick="sortTable('ins-table', 5)">Κατάσταση ⇕</th>
+                                    <th>Ενέργεια</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                     """
-                html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                t_height = min(600, 70 + len(insurances_df) * 45)
-                components.html(html_code, height=t_height, scrolling=False)
+                    for item in ins_list:
+                        html_code += f"""
+                                <tr>
+                                    <td><strong>{item['Ακίνητο']}</strong></td>
+                                    <td>{item['Κατηγορία']}</td>
+                                    <td>{item['Εταιρεία']}</td>
+                                    <td>{item['Λήξη']}</td>
+                                    <td><strong>{item['Ασφάλιστρο']}</strong></td>
+                                    <td>{item['Κατάσταση']}</td>
+                                    <td><button class="action-btn" onclick="triggerPython('EDIT_{item['ID']}', 'hidden_ins_click')">✏️ Επεξ.</button></td>
+                                </tr>
+                        """
+                    html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
+                    t_height = min(600, 70 + len(ins_list) * 45)
+                    components.html(html_code, height=t_height, scrolling=False)
 
+            st.write("")
             if st.button("➕ Νέο Ασφαλιστήριο", type="primary", use_container_width=True):
                 st.session_state.ins_action = 'new'
                 st.rerun()
