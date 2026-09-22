@@ -8,9 +8,29 @@ from datetime import date, datetime
 
 COMMON_CSS = """
 <style>
-    .custom-table { width: 100% !important; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 2rem; }
-    .custom-table th { text-align: left !important; background-color: #f0f2f6; padding: 12px; border-bottom: 1px solid #e6e9ef; color: #31333F; }
-    .custom-table td { text-align: left !important; word-wrap: break-word !important; white-space: normal !important; padding: 12px; border-bottom: 1px solid #e6e9ef; color: #31333F; vertical-align: top; }
+    /* CSS ΓΙΑ ΠΑΓΩΜΕΝΕΣ ΕΠΙΚΕΦΑΛΙΔΕΣ ΚΑΙ ΠΡΩΤΗ ΣΤΗΛΗ ΣΕ HTML ΠΙΝΑΚΕΣ */
+    .table-container {
+        max-height: 500px;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: sans-serif; font-size: 13px; background: white; min-width: 700px; }
+    .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: top; }
+    .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 #ddd; }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 1; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 100px; }
+    .custom-table th:first-child { z-index: 3; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
+    
+    @media (prefers-color-scheme: dark) {
+        .table-container { border-color: #444; }
+        .custom-table { background: #0e1117; color: white; }
+        .custom-table th { background-color: #262730; color: white; box-shadow: 0 1px 0 #444; }
+        .custom-table th:first-child, .custom-table td:first-child { background-color: #0e1117; box-shadow: 1px 0 0 #666; color: white; }
+        .custom-table th:first-child { background-color: #262730; box-shadow: 1px 1px 0 #666; }
+        .custom-table td { border-color: #444; }
+    }
 </style>
 """
 
@@ -89,7 +109,7 @@ def show():
             
             if category in ["Ζημιά / Βλάβη", "Άλλο Έξοδο"]:
                 desc = st.text_input("Περιγραφή (π.χ. Κηπουρός) *")
-                detailed_desc = st.text_area("Αναλυτική Περιγραφή")
+                detailed_desc = st.text_area("Αναλυτική Περιγραφή (π.χ. Τι ακριβώς επισκευάστηκε)")
             
             if "Ασφάλιση" in category:
                 sc1, sc2, sc3, sc4 = st.columns(4)
@@ -136,16 +156,46 @@ def show():
                         st.rerun()
                     except Exception as e: st.error(f"Σφάλμα: {e}")
 
-    # --- 2. ΙΣΤΟΡΙΚΟ ---
+    # --- 2. ΙΣΤΟΡΙΚΟ (ΜΕ ΦΙΛΤΡΑ & ΠΑΓΩΜΕΝΕΣ ΣΤΗΛΕΣ) ---
     with tab_list:
         if expenses_df.empty: st.info("Δεν έχουν καταγραφεί έξοδα.")
         else:
+            # --- ΦΙΛΤΡΑ ---
+            fc1, fc2 = st.columns(2)
+            
+            # Φίλτρο Έτους
+            all_years = set()
+            for _, r in expenses_df.iterrows():
+                try: 
+                    d = datetime.strptime(str(r.get("Date_Paid", "")), "%Y-%m-%d").date()
+                    all_years.add(str(d.year))
+                except: pass
+            sorted_years = ["Όλα τα έτη"] + sorted(list(all_years), reverse=True)
+            sel_year = fc1.selectbox("Επιλογή Έτους", sorted_years)
+
+            # Φίλτρο Κατηγορίας
+            all_cats = ["Όλες οι κατηγορίες", "ΕΝΦΙΑ", "Ασφάλιση Πυρός", "Ασφάλιση Νομικής Προστασίας", "Ζημιά / Βλάβη", "Άλλο Έξοδο"]
+            sel_cat = fc2.selectbox("Κατηγορία", all_cats)
+            
+            st.write("") # Κενό
+
             exp_list = []
             for _, r in expenses_df.iterrows():
+                # Εφαρμογή Φίλτρου Κατηγορίας
+                cat = str(r.get("Category", ""))
+                if sel_cat != "Όλες οι κατηγορίες" and cat != sel_cat:
+                    continue
+                
+                # Εφαρμογή Φίλτρου Έτους
+                raw_date = str(r.get("Date_Paid", ""))
+                try: row_year = str(datetime.strptime(raw_date, "%Y-%m-%d").date().year)
+                except: row_year = ""
+                if sel_year != "Όλα τα έτη" and row_year != sel_year:
+                    continue
+
                 amt = pd.to_numeric(str(r.get('Amount', '0')).replace(',', '.'), errors='coerce')
                 if pd.isna(amt): amt = 0.0
                 
-                cat = str(r.get("Category", ""))
                 target = str(r.get("AFM", "")) if cat == "ΕΝΦΙΑ" else prop_options.get(str(r.get("Property_ID", "")), "-")
                 
                 details = str(r.get("Description", "")).replace('nan', '')
@@ -164,14 +214,18 @@ def show():
                     if det_desc: details = f"<b>{details}</b><br><span style='font-size: 12px; color: #555;'>{det_desc}</span>"
                 
                 exp_list.append({
-                    "Ημερομηνία": str(r.get("Date_Paid", "")),
+                    "Ημερομηνία": raw_date,
                     "Κατηγορία": cat,
                     "Αφορά": target,
                     "Ποσό": f"{amt:.2f} €".replace('.', ','),
                     "Λεπτομέρειες": details
                 })
-            html_table = pd.DataFrame(exp_list[::-1]).to_html(classes='custom-table', escape=False, index=False, justify='left')
-            st.write(f'<div style="overflow-x: auto; max-width: 100%;">{html_table}</div>', unsafe_allow_html=True)
+            
+            if not exp_list:
+                st.info("Δεν βρέθηκαν εγγραφές με τα επιλεγμένα κριτήρια.")
+            else:
+                html_table = pd.DataFrame(exp_list[::-1]).to_html(classes='custom-table', escape=False, index=False, justify='left')
+                st.write(f'<div class="table-container">{html_table}</div>', unsafe_allow_html=True)
 
     # --- 3. ΕΠΕΞΕΡΓΑΣΙΑ / ΔΙΑΓΡΑΦΗ ---
     with tab_edit:
