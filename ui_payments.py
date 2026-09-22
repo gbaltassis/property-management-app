@@ -10,24 +10,28 @@ COMMON_CSS = """
 <style>
     html, body { font-family: sans-serif; }
     .matrix-wrapper { height: 100%; width: 100%; overflow: auto; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-    .matrix-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 950px; }
+    .matrix-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 800px; }
     .matrix-table th, .matrix-table td { padding: 6px; text-align: center; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; }
     .matrix-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; padding: 10px 6px; }
-    .matrix-table th:first-child, .matrix-table td:first-child { position: sticky; left: 0; background-color: #ffffff; z-index: 5; text-align: left; min-width: 140px; max-width: 180px; white-space: normal !important; word-wrap: break-word; box-shadow: 1px 0 0 #bbb; }
+    .matrix-table th:first-child, .matrix-table td:first-child { position: sticky; left: 0; background-color: #ffffff; z-index: 5; text-align: left; min-width: 90px; max-width: 140px; white-space: normal !important; word-wrap: break-word; box-shadow: 1px 0 0 #bbb; }
     .matrix-table th:first-child { z-index: 6; box-shadow: 1px 1px 0 #bbb; }
-    .matrix-cell-btn { display: block; width: 100%; text-align: center; color: #31333F; padding: 6px; border-radius: 4px; background-color: #f8f9fa; border: 1px solid #e9ecef; margin-bottom: 4px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-size: 12px; line-height: 1.3; }
+    .matrix-cell-btn { display: block; width: 100%; text-align: center; color: #31333F; padding: 4px; border-radius: 4px; background-color: #f8f9fa; border: 1px solid #e9ecef; margin-bottom: 2px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-size: 11px; line-height: 1.2; }
     .matrix-cell-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; color: #000; }
-    .matrix-cell-empty { display: block; width: 100%; text-align: center; color: #6c757d; padding: 6px; cursor: pointer; background: none; border: none; font-size: 12px; }
+    .matrix-cell-empty { display: block; width: 100%; text-align: center; color: #6c757d; padding: 4px; cursor: pointer; background: none; border: none; font-size: 11px; }
 
     .table-container { height: 550px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; min-width: 950px; }
-    .custom-table th, .custom-table td { padding: 10px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; }
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 700px; }
+    .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s; }
     .custom-table th:hover { background-color: #e2e6ea; }
-    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 120px; max-width: 160px; white-space: normal !important; word-wrap: break-word; }
+    .custom-table th:first-child, .custom-table td:first-child { position: sticky; left: 0; z-index: 3; background-color: #ffffff; box-shadow: 1px 0 0 #ddd; font-weight: 600; min-width: 90px; max-width: 140px; white-space: normal !important; word-wrap: break-word; }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
-    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 12px; font-weight: bold; transition: 0.2s; text-align: center; }
+    .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 4px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 11px; font-weight: bold; transition: 0.2s; text-align: center; }
     .action-btn:hover { background-color: #e2e6ea; border-color: #dae0e5; }
+    
+    .status-badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; }
+    .status-active { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .status-expired { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
     @media (prefers-color-scheme: dark) {
         .matrix-wrapper, .table-container { border-color: #444; }
@@ -599,7 +603,8 @@ def show():
                     
                     pay_list_data.append({
                         "Payment_ID": str(row.get("Payment_ID", "")),
-                        "Μίσθωση / Ακίνητο": l_opts_all.get(str(row.get("Lease_ID", "")), "Διαγραμμένη Μίσθωση"),
+                        "Ακίνητο": prop_name,
+                        "Ενοικιαστής": tenant_name,
                         "Ημερομηνία": str(row.get("Date_Received", "")),
                         "Μήνας / Έτος": f"{row.get('Calc_Month', '-')} / {row.get('Calc_Year', '-')}",
                         "Είδος": cat_display,
@@ -617,13 +622,14 @@ def show():
                         <table id="pay-table" class="custom-table">
                             <thead>
                                 <tr>
-                                    <th onclick="sortTable('pay-table', 0)">Μίσθωση / Ακίνητο ⇕</th>
-                                    <th onclick="sortTable('pay-table', 1)">Ημερομηνία ⇕</th>
-                                    <th onclick="sortTable('pay-table', 2)">Μήνας / Έτος ⇕</th>
-                                    <th onclick="sortTable('pay-table', 3)">Είδος ⇕</th>
-                                    <th onclick="sortTable('pay-table', 4)">Ποσό ⇕</th>
-                                    <th onclick="sortTable('pay-table', 5)">Κατάσταση ⇕</th>
-                                    <th onclick="sortTable('pay-table', 6)">Μέθοδος ⇕</th>
+                                    <th onclick="sortTable('pay-table', 0)">Ακίνητο ⇕</th>
+                                    <th onclick="sortTable('pay-table', 1)">Ενοικιαστής ⇕</th>
+                                    <th onclick="sortTable('pay-table', 2)">Ημερομηνία ⇕</th>
+                                    <th onclick="sortTable('pay-table', 3)">Μήνας/Έτος ⇕</th>
+                                    <th onclick="sortTable('pay-table', 4)">Είδος ⇕</th>
+                                    <th onclick="sortTable('pay-table', 5)">Ποσό ⇕</th>
+                                    <th onclick="sortTable('pay-table', 6)">Κατάσταση ⇕</th>
+                                    <th onclick="sortTable('pay-table', 7)">Μέθοδος ⇕</th>
                                     <th>Ενέργεια</th>
                                 </tr>
                             </thead>
@@ -632,7 +638,8 @@ def show():
                     for item in pay_list_data[::-1]:
                         html_code += f"""
                                 <tr>
-                                    <td>{item['Μίσθωση / Ακίνητο']}</td>
+                                    <td>{item['Ακίνητο']}</td>
+                                    <td>{item['Ενοικιαστής']}</td>
                                     <td>{item['Ημερομηνία']}</td>
                                     <td>{item['Μήνας / Έτος']}</td>
                                     <td>{item['Είδος']}</td>
