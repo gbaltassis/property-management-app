@@ -121,3 +121,30 @@ def fetch_all_notifications():
 def add_notification_log(row_data):
     sheet = client.open(SPREADSHEET_NAME).worksheet("Notifications_Log")
     sheet.append_row(row_data)
+
+def fetch_all_owners():
+    conn = get_connection()
+    return conn.read(worksheet="Owners", usecols=list(range(6)))
+
+def add_owner(row_data):
+    conn = get_connection()
+    conn.insert(worksheet="Owners", data=[row_data])
+
+def update_owner(owner_id, new_row_data):
+    conn = get_connection()
+    df = conn.read(worksheet="Owners", usecols=list(range(6)))
+    if not df.empty and 'Owner_ID' in df.columns:
+        idx = df.index[df['Owner_ID'] == owner_id].tolist()
+        if idx:
+            conn.update(worksheet="Owners", data=[new_row_data], range=f"A{idx[0]+2}:F{idx[0]+2}")
+
+def delete_owner(owner_id):
+    conn = get_connection()
+    df = conn.read(worksheet="Owners", usecols=list(range(6)))
+    if not df.empty and 'Owner_ID' in df.columns:
+        idx = df.index[df['Owner_ID'] == owner_id].tolist()
+        if idx:
+            # Το gsheets_connection δεν υποστηρίζει άμεσο row delete, 
+            # οπότε καθαρίζουμε τη γραμμή (blank data)
+            blank_row = [owner_id, "ΔΙΑΓΡΑΜΜΕΝΟ", "-", "-", "-", "-"]
+            conn.update(worksheet="Owners", data=[blank_row], range=f"A{idx[0]+2}:F{idx[0]+2}")
