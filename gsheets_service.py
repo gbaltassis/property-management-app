@@ -111,3 +111,13 @@ def delete_insurance(ins_id):
     cell = worksheet.find(ins_id, in_column=1)
     if cell:
         worksheet.delete_rows(cell.row)
+
+# --- NOTIFICATIONS LOG ---
+def fetch_all_notifications():
+    sheet = client.open(SPREADSHEET_NAME).worksheet("Notifications_Log")
+    records = sheet.get_all_records()
+    return pd.DataFrame(records)
+
+def add_notification_log(row_data):
+    sheet = client.open(SPREADSHEET_NAME).worksheet("Notifications_Log")
+    sheet.append_row(row_data)
