@@ -17,8 +17,6 @@ COMMON_CSS = """
     .notif-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
     .notif-title { font-weight: bold; color: #31333F; font-size: 15px; }
     .notif-target { font-size: 12px; color: #6c757d; background: #e9ecef; padding: 4px 8px; border-radius: 4px; }
-    .channel-btn { width: 100%; border: none; padding: 8px; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
-    .channel-btn:hover { opacity: 0.8; }
     
     @media (prefers-color-scheme: dark) {
         .notif-card { background-color: #1e2127; border-left-color: #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
@@ -74,11 +72,80 @@ def send_via_email(to_email, subject, message):
         st.error(f"Αποτυχία αποστολής Email: {e}")
         return False
 
+# -------------------------------------------------------------
+# ΑΝΑΔΥΟΜΕΝΟ ΠΑΡΑΘΥΡΟ ΓΙΑ ΜΕΜΟΝΩΜΕΝΗ ΕΙΔΟΠΟΙΗΣΗ
+# -------------------------------------------------------------
+@st.dialog("✍️ Δημιουργία Μεμονωμένης Ειδοποίησης")
+def manual_notification_dialog(tenants_df, owners_df, today_str):
+    all_contacts = {}
+    if not tenants_df.empty:
+        for _, t in tenants_df.iterrows():
+            if str(t.get("Όνομα")) != "ΔΙΑΓΡΑΜΜΕΝΟ":
+                all_contacts[f"Ενοικιαστής: {t.get('Επώνυμο', '')} {t.get('Όνομα', '')} ({t.get('Tenant_ID', '')})"] = {"phone": t.get("Κινητό"), "email": t.get("Email")}
+    if not owners_df.empty:
+        for _, o in owners_df.iterrows():
+            if str(o.get("Όνομα")) != "ΔΙΑΓΡΑΜΜΕΝΟ":
+                all_contacts[f"Ιδιοκτήτης: {o.get('Επώνυμο', '')} {o.get('Όνομα', '')} ({o.get('Owner_ID', '')})"] = {"phone": o.get("Κινητό"), "email": o.get("Email")}
+
+    selected_contact = st.selectbox("Επιλογή Παραλήπτη από Μητρώο:", ["-- Επιλέξτε Επαφή --"] + list(all_contacts.keys()))
+    
+    custom_phone = ""
+    custom_email = ""
+    if selected_contact != "-- Επιλέξτε Επαφή --":
+        custom_phone = str(all_contacts[selected_contact]["phone"]).replace('nan', '').replace(' ', '')
+        custom_email = str(all_contacts[selected_contact]["email"]).replace('nan', '').replace(' ', '')
+        
+    c_ph, c_em = st.columns(2)
+    man_phone = c_ph.text_input("Κινητό Παραλήπτη", value=custom_phone)
+    man_email = c_em.text_input("Email Παραλήπτη", value=custom_email)
+    
+    man_msg = st.text_area("Κείμενο Ειδοποίησης", height=120, key="man_msg")
+    
+    st.write("Επιλέξτε μέσο αποστολής:")
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    
+    if mc1.button("📱 SMS", key="man_sms", type="primary", use_container_width=True):
+        if not man_phone: st.warning("Συμπληρώστε κινητό.")
+        elif send_via_macrodroid(man_phone, man_msg, "sms"):
+            log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
+            gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[SMS] {man_msg}"])
+            st.success("Εστάλη επιτυχώς!")
+            time.sleep(1.5)
+            st.rerun()
+            
+    if mc2.button("💜 Viber", key="man_vib", type="primary", use_container_width=True):
+        if not man_phone: st.warning("Συμπληρώστε κινητό.")
+        elif send_via_macrodroid(man_phone, man_msg, "viber"):
+            log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
+            gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[Viber] {man_msg}"])
+            st.success("Εστάλη επιτυχώς!")
+            time.sleep(1.5)
+            st.rerun()
+            
+    if mc3.button("🟩 WhatsApp", key="man_wa", type="primary", use_container_width=True):
+        if not man_phone: st.warning("Συμπληρώστε κινητό.")
+        elif send_via_macrodroid(man_phone, man_msg, "whatsapp"):
+            log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
+            gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[WhatsApp] {man_msg}"])
+            st.success("Εστάλη επιτυχώς!")
+            time.sleep(1.5)
+            st.rerun()
+            
+    if mc4.button("📧 Email", key="man_em", type="primary", use_container_width=True):
+        if not man_email: st.warning("Συμπληρώστε Email.")
+        elif send_via_email(man_email, "Ενημέρωση από Διαχείριση", man_msg):
+            log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
+            gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[Email] {man_msg}"])
+            st.success("Εστάλη επιτυχώς!")
+            time.sleep(1.5)
+            st.rerun()
+
+# -------------------------------------------------------------
+# ΚΕΝΤΡΙΚΗ ΣΕΛΙΔΑ ΕΙΔΟΠΟΙΗΣΕΩΝ
+# -------------------------------------------------------------
 def show():
     st.markdown(COMMON_CSS, unsafe_allow_html=True)
-    st.header("🔔 Κέντρο Ειδοποιήσεων")
-    st.caption("Επεξεργαστείτε το κείμενο αν επιθυμείτε και πατήστε το κανάλι αποστολής.")
-
+    
     try:
         leases_df = gsheets_service.fetch_all_leases()
         insurances_df = gsheets_service.fetch_all_insurances()
@@ -96,11 +163,23 @@ def show():
 
     today = date.today()
     today_str = today.strftime("%Y-%m-%d")
+    
+    # ------------------- HEADER & ΚΟΥΜΠΙ ΝΕΑΣ ΕΙΔΟΠΟΙΗΣΗΣ -------------------
+    col_title, col_btn = st.columns([3, 1])
+    with col_title:
+        st.header("🔔 Κέντρο Ειδοποιήσεων")
+        st.caption("Επεξεργαστείτε το κείμενο αν επιθυμείτε και πατήστε το κανάλι αποστολής.")
+    with col_btn:
+        st.write("") # Κενό για ευθυγράμμιση
+        if st.button("➕ Νέα Ειδοποίηση", use_container_width=True, type="secondary"):
+            manual_notification_dialog(tenants_df, owners_df, today_str)
+            
+    st.markdown("---")
+    # ------------------------------------------------------------------------
+
     pending_notifications = []
 
-    # =============================================================
-    # 1. ΕΛΕΓΧΟΣ ΜΙΣΘΩΣΕΩΝ (30 & 10 μέρες πριν)
-    # =============================================================
+    # 1. ΕΛΕΓΧΟΣ ΜΙΣΘΩΣΕΩΝ
     if not leases_df.empty:
         for _, lease in leases_df.iterrows():
             l_id = str(lease.get("Lease_ID", ""))
@@ -123,7 +202,6 @@ def show():
                         
                         notif_type = f"LEASE_{days_left}_{l_id}_{t_id}"
                         
-                        # ΝΕΑ ΛΟΓΙΚΗ: Ελέγχουμε αν στάλθηκε ΣΗΜΕΡΑ
                         already_sent_today = False
                         if not log_df.empty and 'Type' in log_df.columns and 'Date_Sent' in log_df.columns:
                             match = log_df[(log_df['Type'] == notif_type) & (log_df['Date_Sent'] == today_str)]
@@ -136,9 +214,7 @@ def show():
                                 "Title": f"Λήξη Μίσθωσης σε {days_left} μέρες ({p_name})", "Default_Message": msg, "Urgent": days_left <= 10
                             })
 
-    # =============================================================
-    # 2. ΕΛΕΓΧΟΣ ΑΣΦΑΛΙΣΤΗΡΙΩΝ (15, 7 & 2 μέρες πριν)
-    # =============================================================
+    # 2. ΕΛΕΓΧΟΣ ΑΣΦΑΛΙΣΤΗΡΙΩΝ
     if not insurances_df.empty:
         for _, ins in insurances_df.iterrows():
             i_id = str(ins.get("Insurance_ID", ""))
@@ -181,25 +257,27 @@ def show():
                                     })
                                     notified_afms.add(afm)
 
-    # =============================================================
     # 3. ΕΛΕΓΧΟΣ ΕΚΚΡΕΜΩΝ ΟΦΕΙΛΩΝ / ΕΙΣΠΡΑΞΕΩΝ
-    # =============================================================
     if not payments_df.empty:
-        for _, pay in payments_df.iterrows():
-            pay_id = str(pay.get("Payment_ID", ""))
+        for idx_row, pay in payments_df.iterrows():
+            # Δοκιμάζουμε να πάρουμε το ID είτε από τη στήλη 'Payment_ID' είτε από την πρώτη στήλη (iloc[0])
+            pay_id = str(pay.get("Payment_ID", pay.iloc[0]))
             if not pay_id or pay_id == 'nan': continue
             
-            # Ελέγχουμε την κατάσταση - αν ΔΕΝ γράφει κάπου "εξοφλ" ή "paid" θεωρείται εκκρεμής
-            status = str(pay.get("Κατάσταση", str(pay.get("Status", "")))).strip().lower()
-            if status and "εξοφλ" not in status and "paid" not in status:
-                p_id = str(pay.get("Property_ID", ""))
+            # Ελέγχουμε την Κατάσταση (ακόμα και αν είναι κενή, θεωρείται απλήρωτη)
+            status = str(pay.get("Κατάσταση", pay.get("Status", ""))).strip().lower()
+            is_paid = "εξοφλ" in status or "paid" in status or status == "ναι" or status == "true"
+            
+            if not is_paid:
+                p_id = str(pay.get("Property_ID", pay.get("ID Ακινήτου", pay.get("Ακίνητο", ""))))
                 p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
                 p_name = str(p_match.iloc[0].get("Χαρακτηριστικό", "Το ακίνητο")) if not p_match.empty else "Το ακίνητο"
                 
-                amount = str(pay.get("Ποσό", pay.get("Amount", "0"))).replace(".", ",")
+                amount = str(pay.get("Ποσό", pay.get("Amount", pay.get("Σύνολο", "0")))).replace(".", ",")
+                if amount == "0" or amount == "nan": continue # Αν δεν έχει ποσό, προσπέρασέ το
                 
-                # Βρίσκουμε τον ενοικιαστή (από την πληρωμή, αλλιώς από τη μίσθωση)
-                t_ids_str = str(pay.get("Tenant_ID", ""))
+                # Βρίσκουμε τον ενοικιαστή 
+                t_ids_str = str(pay.get("Tenant_ID", pay.get("Ενοικιαστής", "")))
                 if (not t_ids_str or t_ids_str == 'nan') and not leases_df.empty:
                     l_match = leases_df[leases_df['Property_ID'] == p_id]
                     if not l_match.empty:
@@ -207,7 +285,7 @@ def show():
                         
                 t_ids = [t.strip() for t in t_ids_str.split(',') if t.strip()]
                 for t_id in t_ids:
-                    t_match = tenants_df[tenants_df["Tenant_ID"] == t_id]
+                    t_match = tenants_df[tenants_df["Tenant_ID"] == t_id] if 'Tenant_ID' in tenants_df.columns else pd.DataFrame()
                     if not t_match.empty:
                         t_name = str(t_match.iloc[0].get("Όνομα", ""))
                         t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
@@ -215,8 +293,6 @@ def show():
                         
                         notif_type = f"PAY_{pay_id}_{t_id}"
                         
-                        # ΛΟΓΙΚΗ ΕΠΑΝΑΛΗΨΗΣ: Ελέγχει αν έχουμε στείλει για αυτή την οφειλή ΣΗΜΕΡΑ. 
-                        # Αν στείλαμε χθες και παραμένει απλήρωτη, η ειδοποίηση θα εμφανιστεί ΞΑΝΑ!
                         already_sent_today = False
                         if not log_df.empty and 'Type' in log_df.columns and 'Date_Sent' in log_df.columns:
                             match = log_df[(log_df['Type'] == notif_type) & (log_df['Date_Sent'] == today_str)]
@@ -229,11 +305,7 @@ def show():
                                 "Title": f"⚠️ Εκκρεμής Οφειλή {amount}€ ({p_name})", "Default_Message": msg, "Urgent": True
                             })
 
-    # =============================================================
-    # ΟΠΤΙΚΟΠΟΙΗΣΗ & ΔΙΑΧΕΙΡΙΣΗ ΕΚΚΡΕΜΟΤΗΤΩΝ
-    # =============================================================
-    st.markdown("---")
-    
+    # ΟΠΤΙΚΟΠΟΙΗΣΗ ΤΩΝ ΑΠΟΤΕΛΕΣΜΑΤΩΝ ΣΤΗΝ ΟΘΟΝΗ
     if not pending_notifications:
         st.success("🎉 Δεν υπάρχουν εκκρεμείς ειδοποιήσεις για σήμερα.")
     else:
@@ -292,73 +364,3 @@ def show():
                             time.sleep(1)
                             st.rerun()
                 st.write("")
-
-    # =============================================================
-    # ΜΕΜΟΝΩΜΕΝΗ / ΧΕΙΡΟΚΙΝΗΤΗ ΕΙΔΟΠΟΙΗΣΗ
-    # =============================================================
-    st.markdown("---")
-    
-    # Μαζεύουμε όλες τις επαφές για το Dropdown
-    all_contacts = {}
-    if not tenants_df.empty:
-        for _, t in tenants_df.iterrows():
-            if str(t.get("Όνομα")) != "ΔΙΑΓΡΑΜΜΕΝΟ":
-                all_contacts[f"Ενοικιαστής: {t.get('Επώνυμο', '')} {t.get('Όνομα', '')} ({t.get('Tenant_ID', '')})"] = {"phone": t.get("Κινητό"), "email": t.get("Email")}
-    if not owners_df.empty:
-        for _, o in owners_df.iterrows():
-            if str(o.get("Όνομα")) != "ΔΙΑΓΡΑΜΜΕΝΟ":
-                all_contacts[f"Ιδιοκτήτης: {o.get('Επώνυμο', '')} {o.get('Όνομα', '')} ({o.get('Owner_ID', '')})"] = {"phone": o.get("Κινητό"), "email": o.get("Email")}
-
-    with st.expander("✍️ Δημιουργία Μεμονωμένης Ειδοποίησης (Χειροκίνητα)", expanded=False):
-        c_target, _ = st.columns([1, 1])
-        contact_keys = ["-- Επιλέξτε Επαφή --"] + list(all_contacts.keys())
-        selected_contact = c_target.selectbox("Επιλογή Παραλήπτη", contact_keys)
-        
-        custom_phone = ""
-        custom_email = ""
-        if selected_contact != "-- Επιλέξτε Επαφή --":
-            custom_phone = str(all_contacts[selected_contact]["phone"]).replace('nan', '').replace(' ', '')
-            custom_email = str(all_contacts[selected_contact]["email"]).replace('nan', '').replace(' ', '')
-            
-        c_ph, c_em = st.columns(2)
-        man_phone = c_ph.text_input("Κινητό Παραλήπτη", value=custom_phone)
-        man_email = c_em.text_input("Email Παραλήπτη", value=custom_email)
-        
-        man_msg = st.text_area("Κείμενο Ειδοποίησης", height=100, key="man_msg")
-        
-        mc1, mc2, mc3, mc4 = st.columns(4)
-        if mc1.button("📱 SMS", key="man_sms", type="primary", use_container_width=True):
-            if not man_phone: st.warning("Συμπληρώστε κινητό.")
-            elif send_via_macrodroid(man_phone, man_msg, "sms"):
-                log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
-                gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[SMS] {man_msg}"])
-                st.success("Εστάλη!")
-                time.sleep(1.5)
-                st.rerun()
-                
-        if mc2.button("💜 Viber", key="man_vib", type="primary", use_container_width=True):
-            if not man_phone: st.warning("Συμπληρώστε κινητό.")
-            elif send_via_macrodroid(man_phone, man_msg, "viber"):
-                log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
-                gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[Viber] {man_msg}"])
-                st.success("Εστάλη!")
-                time.sleep(1.5)
-                st.rerun()
-                
-        if mc3.button("🟩 WhatsApp", key="man_wa", type="primary", use_container_width=True):
-            if not man_phone: st.warning("Συμπληρώστε κινητό.")
-            elif send_via_macrodroid(man_phone, man_msg, "whatsapp"):
-                log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
-                gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[WhatsApp] {man_msg}"])
-                st.success("Εστάλη!")
-                time.sleep(1.5)
-                st.rerun()
-                
-        if mc4.button("📧 Email", key="man_em", type="primary", use_container_width=True):
-            if not man_email: st.warning("Συμπληρώστε Email.")
-            elif send_via_email(man_email, "Ενημέρωση Ακινήτου", man_msg):
-                log_target = selected_contact.split(' (')[0] if selected_contact != "-- Επιλέξτε Επαφή --" else "Χειροκίνητη επαφή"
-                gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, log_target, "MANUAL", f"[Email] {man_msg}"])
-                st.success("Εστάλη!")
-                time.sleep(1.5)
-                st.rerun()
