@@ -258,52 +258,53 @@ def show():
                                     notified_afms.add(afm)
 
     # 3. ΕΛΕΓΧΟΣ ΕΚΚΡΕΜΩΝ ΟΦΕΙΛΩΝ / ΕΙΣΠΡΑΞΕΩΝ
-    if not payments_df.empty:
-        for idx_row, pay in payments_df.iterrows():
-            # Δοκιμάζουμε να πάρουμε το ID είτε από τη στήλη 'Payment_ID' είτε από την πρώτη στήλη (iloc[0])
-            pay_id = str(pay.get("Payment_ID", pay.iloc[0]))
-            if not pay_id or pay_id == 'nan': continue
+    if not payments_df.empty and 'Status' in payments_df.columns:
+        # Φιλτράρισμα βάσει του πώς είναι αποθηκευμένο στο gsheets_service/ui_payments
+        pending_payments = payments_df[payments_df['Status'] == 'Εκκρεμεί']
+        
+        for _, pay in pending_payments.iterrows():
+            pay_id = str(pay.get("Payment_ID", ""))
+            l_id = str(pay.get("Lease_ID", "")) # Οι πληρωμές συνδέονται με Lease_ID!
             
-            # Ελέγχουμε την Κατάσταση (ακόμα και αν είναι κενή, θεωρείται απλήρωτη)
-            status = str(pay.get("Κατάσταση", pay.get("Status", ""))).strip().lower()
-            is_paid = "εξοφλ" in status or "paid" in status or status == "ναι" or status == "true"
+            if not pay_id or pay_id == 'nan' or not l_id or l_id == 'nan': 
+                continue
             
-            if not is_paid:
-                p_id = str(pay.get("Property_ID", pay.get("ID Ακινήτου", pay.get("Ακίνητο", ""))))
-                p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
-                p_name = str(p_match.iloc[0].get("Χαρακτηριστικό", "Το ακίνητο")) if not p_match.empty else "Το ακίνητο"
+            amount = str(pay.get("Amount", "0")).replace(".", ",")
+            if amount == "0" or amount == "nan": 
+                continue
                 
-                amount = str(pay.get("Ποσό", pay.get("Amount", pay.get("Σύνολο", "0")))).replace(".", ",")
-                if amount == "0" or amount == "nan": continue # Αν δεν έχει ποσό, προσπέρασέ το
+            # Βρίσκουμε τη μίσθωση για να τραβήξουμε Ακίνητο και Ενοικιαστή
+            l_match = leases_df[leases_df['Lease_ID'] == l_id] if not leases_df.empty else pd.DataFrame()
+            if l_match.empty:
+                continue
                 
-                # Βρίσκουμε τον ενοικιαστή 
-                t_ids_str = str(pay.get("Tenant_ID", pay.get("Ενοικιαστής", "")))
-                if (not t_ids_str or t_ids_str == 'nan') and not leases_df.empty:
-                    l_match = leases_df[leases_df['Property_ID'] == p_id]
-                    if not l_match.empty:
-                        t_ids_str = str(l_match.iloc[-1].get("Tenant_ID", ""))
+            p_id = str(l_match.iloc[0].get("Property_ID", ""))
+            t_ids_str = str(l_match.iloc[0].get("Tenant_ID", ""))
+            
+            p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
+            p_name = str(p_match.iloc[0].get("Χαρακτηριστικό", "Το ακίνητο")) if not p_match.empty else "Το ακίνητο"
+            
+            t_ids = [t.strip() for t in t_ids_str.split(',') if t.strip()]
+            for t_id in t_ids:
+                t_match = tenants_df[tenants_df["Tenant_ID"] == t_id] if 'Tenant_ID' in tenants_df.columns else pd.DataFrame()
+                if not t_match.empty:
+                    t_name = str(t_match.iloc[0].get("Όνομα", ""))
+                    t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
+                    t_email = str(t_match.iloc[0].get("Email", ""))
+                    
+                    notif_type = f"PAY_{pay_id}_{t_id}"
+                    
+                    already_sent_today = False
+                    if not log_df.empty and 'Type' in log_df.columns and 'Date_Sent' in log_df.columns:
+                        match = log_df[(log_df['Type'] == notif_type) & (log_df['Date_Sent'] == today_str)]
+                        already_sent_today = not match.empty
                         
-                t_ids = [t.strip() for t in t_ids_str.split(',') if t.strip()]
-                for t_id in t_ids:
-                    t_match = tenants_df[tenants_df["Tenant_ID"] == t_id] if 'Tenant_ID' in tenants_df.columns else pd.DataFrame()
-                    if not t_match.empty:
-                        t_name = str(t_match.iloc[0].get("Όνομα", ""))
-                        t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
-                        t_email = str(t_match.iloc[0].get("Email", ""))
-                        
-                        notif_type = f"PAY_{pay_id}_{t_id}"
-                        
-                        already_sent_today = False
-                        if not log_df.empty and 'Type' in log_df.columns and 'Date_Sent' in log_df.columns:
-                            match = log_df[(log_df['Type'] == notif_type) & (log_df['Date_Sent'] == today_str)]
-                            already_sent_today = not match.empty
-                            
-                        if not already_sent_today:
-                            msg = f"Γεια σας {t_name}. Υπενθύμιση: Εκκρεμεί η εξόφληση ποσού {amount}€ για το '{p_name}'. Παρακαλούμε για την τακτοποίησή της το συντομότερο."
-                            pending_notifications.append({
-                                "Type": notif_type, "Target_Phone": t_phone, "Target_Email": t_email, "Target_Name": f"Ενοικιαστής: {t_name}", 
-                                "Title": f"⚠️ Εκκρεμής Οφειλή {amount}€ ({p_name})", "Default_Message": msg, "Urgent": True
-                            })
+                    if not already_sent_today:
+                        msg = f"Γεια σας {t_name}. Υπενθύμιση: Εκκρεμεί η εξόφληση ποσού {amount}€ για το '{p_name}'. Παρακαλούμε για την τακτοποίησή της το συντομότερο."
+                        pending_notifications.append({
+                            "Type": notif_type, "Target_Phone": t_phone, "Target_Email": t_email, "Target_Name": f"Ενοικιαστής: {t_name}", 
+                            "Title": f"⚠️ Εκκρεμής Οφειλή {amount}€ ({p_name})", "Default_Message": msg, "Urgent": True
+                        })
 
     # ΟΠΤΙΚΟΠΟΙΗΣΗ ΤΩΝ ΑΠΟΤΕΛΕΣΜΑΤΩΝ ΣΤΗΝ ΟΘΟΝΗ
     if not pending_notifications:
