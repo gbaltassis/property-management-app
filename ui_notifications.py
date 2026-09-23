@@ -1,268 +1,201 @@
 import streamlit as st
-import pandas as pd
 import gsheets_service
-from datetime import datetime, date
-import uuid
-import urllib.parse
+import pandas as pd
+from datetime import date, datetime
+import requests
 import time
-import streamlit.components.v1 as components
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import uuid
 
 COMMON_CSS = """
 <style>
-    .notif-card { background-color: #ffffff; border-left: 5px solid #007bff; border-radius: 6px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .notif-warning { border-left-color: #ffc107; }
-    .notif-danger { border-left-color: #dc3545; }
-    .notif-debt { border-left-color: #fd7e14; }
-    .notif-custom { border-left-color: #17a2b8; }
-    .notif-title { font-size: 16px; font-weight: bold; color: #31333F; margin-bottom: 5px; }
-    .notif-meta { font-size: 11px; color: #888; margin-bottom: 10px; }
-    .link-btn { display: inline-block; padding: 6px 12px; margin-right: 5px; margin-bottom: 5px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold; color: white !important; text-align: center; cursor: pointer; transition: opacity 0.2s; border: none; }
-    .link-btn:hover { opacity: 0.8; }
-    .btn-sms { background-color: #28a745; }
-    .btn-viber { background-color: #665CAC; }
-    .btn-wa { background-color: #25D366; }
-    .btn-copy { background-color: #6c757d; }
+    html, body { font-family: sans-serif; background-color: transparent; }
+    .notif-card { background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; }
+    .notif-urgent { border-left-color: #dc3545; background-color: #fff3cd; }
+    .notif-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .notif-title { font-weight: bold; color: #31333F; font-size: 15px; }
+    .notif-target { font-size: 12px; color: #6c757d; background: #e9ecef; padding: 2px 6px; border-radius: 4px; }
+    .notif-text { font-size: 14px; color: #444; margin-bottom: 15px; line-height: 1.4; background: white; padding: 10px; border-radius: 4px; border: 1px dashed #ccc; }
+    
+    @media (prefers-color-scheme: dark) {
+        .notif-card { background-color: #1e2127; border-left-color: #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .notif-urgent { border-left-color: #ef4444; background-color: #2e1c1c; }
+        .notif-title { color: #f8f9fa; }
+        .notif-target { background: #2d3748; color: #a0aec0; }
+        .notif-text { color: #e2e8f0; background: #1a202c; border-color: #4a5568; }
+    }
 </style>
 """
 
-COPY_JS = """
-<script>
-    function copyTextToClipboard(textId) {
-        var copyText = document.getElementById(textId).innerText || document.getElementById(textId).value;
-        navigator.clipboard.writeText(copyText).then(function() {
-            alert("Το κείμενο αντιγράφηκε! Μπορείτε να κάνετε Επικόλληση (Paste).");
-        }, function(err) {
-            console.error('Αποτυχία αντιγραφής: ', err);
-        });
-    }
-</script>
-"""
-
-def send_direct_email(to_email, subject, body):
+def send_sms_via_macrodroid(phone, message):
+    # Διαβάζουμε το Webhook URL από τα Secrets του Streamlit
+    macrodroid_url = st.secrets.get("macrodroid_url", "")
+    
+    if not macrodroid_url:
+        st.error("Σφάλμα: Δεν έχει οριστεί το 'macrodroid_url' στα Secrets!")
+        return False
+    
     try:
-        sender_email = st.secrets.get("GMAIL_USER")
-        sender_password = st.secrets.get("GMAIL_PASS")
+        # Το Webhook του MacroDroid περιμένει GET request με τα params number & message
+        response = requests.get(macrodroid_url, params={"number": phone, "message": message}, timeout=10)
         
-        if not sender_email or not sender_password:
-            return False, "Δεν έχουν ρυθμιστεί τα GMAIL_USER και GMAIL_PASS στα secrets του Streamlit."
-
-        msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        return True, "Το email στάλθηκε επιτυχώς!"
-    except Exception as e:
-        return False, str(e)
+        # Αν επιστρέψει 200 (OK), σημαίνει ότι έφτασε στο κινητό σου!
+        if response.status_code == 200:
+            return True
+        else:
+            st.error(f"Το MacroDroid επέστρεψε σφάλμα: {response.status_code}")
+            return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Αποτυχία επικοινωνίας με το MacroDroid: {e}")
+        return False
 
 def show():
-    if "custom_notif_mode" not in st.session_state: st.session_state.custom_notif_mode = False
-
     st.markdown(COMMON_CSS, unsafe_allow_html=True)
-    components.html(COPY_JS, height=0)
-    
-    col_t, col_b = st.columns([3, 1])
-    col_t.header("🔔 Κέντρο Ειδοποιήσεων")
-    if not st.session_state.custom_notif_mode:
-        if col_b.button("➕ Νέο Μήνυμα", use_container_width=True):
-            st.session_state.custom_notif_mode = True
-            st.rerun()
+    st.header("🔔 Κέντρο Ειδοποιήσεων")
+    st.caption("Το σύστημα ανιχνεύει αυτόματα τις επερχόμενες λήξεις και προτείνει μηνύματα (SMS).")
+
+    if not st.secrets.get("macrodroid_url", ""):
+        st.warning("⚠️ Δεν έχει ρυθμιστεί το Webhook του MacroDroid στα Secrets. Η αποστολή SMS δεν θα λειτουργήσει.")
 
     try:
         leases_df = gsheets_service.fetch_all_leases()
         insurances_df = gsheets_service.fetch_all_insurances()
         properties_df = gsheets_service.fetch_all_properties()
         tenants_df = gsheets_service.fetch_all_tenants()
-        payments_df = gsheets_service.fetch_all_payments()
-        try: notif_df = gsheets_service.fetch_all_notifications()
-        except: notif_df = pd.DataFrame(columns=["Log_ID", "Date_Sent", "Target", "Type", "Message"])
+        
+        try: owners_df = gsheets_service.fetch_all_owners()
+        except: owners_df = pd.DataFrame()
+        
+        try: log_df = gsheets_service.fetch_all_notifications_log()
+        except: log_df = pd.DataFrame(columns=["Log_ID", "Date_Sent", "Target", "Type", "Message"])
+            
     except Exception as e:
-        st.error(f"Αδυναμία φόρτωσης δεδομένων: {e}")
+        st.error(f"Σφάλμα κατά τη φόρτωση δεδομένων: {e}")
         return
 
     today = date.today()
     pending_notifications = []
 
-    # =====================================================================
-    # 1. ΛΕΙΤΟΥΡΓΙΑ CUSTOM ΜΗΝΥΜΑΤΟΣ
-    # =====================================================================
-    if st.session_state.custom_notif_mode:
-        st.markdown("### ✍️ Σύνταξη Νέου Μηνύματος")
-        if st.button("⬅️ Ακύρωση", key="cancel_custom"):
-            st.session_state.custom_notif_mode = False; st.rerun()
-            
-        c_target_type = st.radio("Προς ποιον θέλετε να στείλετε;", ["Ενοικιαστή", "Ιδιοκτήτη"], horizontal=True)
-        
-        target_opts = {}
-        if c_target_type == "Ενοικιαστή" and not tenants_df.empty:
-            for _, t in tenants_df.iterrows():
-                target_opts[str(t.get("Tenant_ID", ""))] = {
-                    "name": f"{t.get('Επώνυμο', '')} {t.get('Όνομα', '')}".strip(),
-                    "phone": str(t.get('Κινητό', '')).replace('nan', ''),
-                    "email": str(t.get('Email', '')).replace('nan', '')
-                }
-        elif c_target_type == "Ιδιοκτήτη" and not properties_df.empty:
-            for _, p in properties_df.iterrows():
-                for i in range(1, 4):
-                    n, s, afm = str(p.get(f'Name_{i}', '')), str(p.get(f'Surname_{i}', '')), str(p.get(f'AFM_{i}', ''))
-                    if n and n != 'nan':
-                        target_opts[afm] = {"name": f"{n} {s}".strip(), "phone": "", "email": ""}
-                        
-        t_keys = list(target_opts.keys())
-        sel_target_id = st.selectbox("Επιλέξτε Παραλήπτη", t_keys, format_func=lambda x: target_opts[x]['name']) if t_keys else None
-        
-        c_msg = st.text_area("Κείμενο Μηνύματος", placeholder="Γράψτε εδώ το μήνυμά σας...")
-        
-        if sel_target_id and c_msg:
-            t_info = target_opts[sel_target_id]
-            encoded_msg = urllib.parse.quote(c_msg)
-            clean_phone = t_info['phone'].replace(' ', '')
-            if clean_phone and not clean_phone.startswith('+30') and not clean_phone.startswith('0030'): clean_phone = f"+30{clean_phone}"
-            
-            st.markdown(f"**Στοιχεία:** 📞 {t_info['phone'] or '---'} | ✉️ {t_info['email'] or '---'}")
-            
-            c1, c2, c3, c4 = st.columns(4)
-            sms_link = f"sms:{clean_phone}?body={encoded_msg}" if clean_phone else "#"
-            viber_link = f"viber://chat?number={clean_phone}" if clean_phone else "#"
-            wa_link = f"https://wa.me/{clean_phone.replace('+','')}?text={encoded_msg}" if clean_phone else "#"
-            
-            c1.markdown(f'<a href="{viber_link}" class="link-btn btn-viber" target="_blank" style="width:100%;">💜 Viber</a>', unsafe_allow_html=True)
-            c2.markdown(f'<a href="{wa_link}" class="link-btn btn-wa" target="_blank" style="width:100%;">💬 WhatsApp</a>', unsafe_allow_html=True)
-            c3.markdown(f'<a href="{sms_link}" class="link-btn btn-sms" target="_blank" style="width:100%;">📱 SMS App</a>', unsafe_allow_html=True)
-            
-            if c4.button("📧 Άμεση Αποστολή Email", type="primary", use_container_width=True):
-                if t_info['email']:
-                    success, msg_result = send_direct_email(t_info['email'], "Ενημέρωση από Property Management", c_msg)
-                    if success: st.success(msg_result)
-                    else: st.error(msg_result)
-                else:
-                    st.warning("Ο παραλήπτης δεν έχει δηλωμένο email.")
-        return
-
-    # =====================================================================
-    # 2. ΣΥΛΛΟΓΗ ΑΥΤΟΜΑΤΩΝ ΕΙΔΟΠΟΙΗΣΕΩΝ (ΟΦΕΙΛΕΣ, ΑΣΦΑΛΙΣΤΗΡΙΑ, ΜΙΣΘΩΣΕΙΣ)
-    # =====================================================================
-    if not payments_df.empty:
-        for _, pay in payments_df[payments_df['Status'] == 'Εκκρεμεί'].iterrows():
-            pay_id = str(pay.get("Payment_ID", ""))
-            notif_type = f"DEBT_{pay_id}"
-            if not notif_df.empty and not notif_df[notif_df["Type"] == notif_type].empty: continue
-                
-            l_id, p_type = str(pay.get("Lease_ID", "")), str(pay.get("Payment_Type", ""))
-            amt = pd.to_numeric(str(pay.get("Amount", "0")).replace(',', '.'), errors='coerce')
-            
-            tenant_name, tenant_phone, tenant_email = "Ενοικιαστή", "", ""
-            l_match = leases_df[leases_df['Lease_ID'] == l_id] if not leases_df.empty else pd.DataFrame()
-            if not l_match.empty:
-                t_ids = [t.strip() for t in str(l_match.iloc[0].get("Tenant_ID", "")).split(',') if t.strip()]
-                if t_ids and not tenants_df.empty:
-                    t_match = tenants_df[tenants_df["Tenant_ID"] == t_ids[0]]
-                    if not t_match.empty:
-                        tenant_name = f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}".strip()
-                        tenant_phone = str(t_match.iloc[0].get('Κινητό', '')).replace('nan', '')
-                        tenant_email = str(t_match.iloc[0].get('Email', '')).replace('nan', '')
-                
-            m_str, y_str = str(pay.get("Calc_Month", "")), str(pay.get("Calc_Year", ""))
-            period = f"του {m_str}/{y_str}" if m_str != "0" else "που έχει καταχωρηθεί"
-            msg = f"Αγαπητέ/ή {tenant_name},\n\nΣας υπενθυμίζουμε ότι υπάρχει μια εκκρεμής οφειλή {amt:.2f}€ για {p_type} ({period}).\n\nΠαρακαλούμε μεριμνήστε για την τακτοποίησή της.\nΜε εκτίμηση."
-            
-            pending_notifications.append({"title": f"💰 Οφειλή ({p_type}: {amt:.2f}€)", "name": tenant_name, "phone": tenant_phone, "email": tenant_email, "message": msg, "type": notif_type, "css": "notif-debt", "entity": "Λογαριασμός"})
-
-    if not insurances_df.empty:
-        for _, ins in insurances_df.iterrows():
-            try: ren_d = datetime.strptime(str(ins.get("Renewal_Date", "")), "%Y-%m-%d").date()
-            except: continue
-            days_left = (ren_d - today).days
-            if days_left in [15, 7, 2]:
-                notif_type = f"INS_{days_left}_{str(ins.get('Insurance_ID', ''))}"
-                if not notif_df.empty and not notif_df[notif_df["Type"] == notif_type].empty: continue
-                
-                p_id, comp = str(ins.get("Property_ID", "")), str(ins.get("Company", ""))
-                p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
-                owner_name, prop_charact = "Ιδιοκτήτη", "Ακίνητο"
-                if not p_match.empty:
-                    prop_charact = str(p_match.iloc[0].get("Χαρακτηριστικό", "Ακίνητο"))
-                    owner_name = f"{str(p_match.iloc[0].get('Name_1', ''))} {str(p_match.iloc[0].get('Surname_1', ''))}".strip()
-
-                msg = f"Γεια σας {owner_name},\n\nΥπενθύμιση: Το ασφαλιστήριο συμβόλαιο για το ακίνητο '{prop_charact}' στην {comp} λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')}).\n\nΠαρακαλώ μεριμνήστε για την ανανέωσή του.\nΜε εκτίμηση."
-                pending_notifications.append({"title": f"🛡️ Λήξη σε {days_left} μέρες", "name": owner_name, "phone": "", "email": "", "message": msg, "type": notif_type, "css": "notif-danger" if days_left==2 else "notif-warning", "entity": prop_charact})
-
+    # =============================================================
+    # 1. ΕΛΕΓΧΟΣ ΜΙΣΘΩΣΕΩΝ (30 & 10 μέρες πριν τη λήξη)
+    # =============================================================
     if not leases_df.empty:
         for _, lease in leases_df.iterrows():
+            l_id = str(lease.get("Lease_ID", ""))
             try: end_d = datetime.strptime(str(lease.get("End_Date", "")), "%Y-%m-%d").date()
             except: continue
+            
             days_left = (end_d - today).days
+            
             if days_left in [30, 10]:
-                notif_type = f"LEASE_{days_left}_{str(lease.get('Lease_ID', ''))}"
-                if not notif_df.empty and not notif_df[notif_df["Type"] == notif_type].empty: continue
-                
                 p_id = str(lease.get("Property_ID", ""))
                 p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
-                prop_charact = str(p_match.iloc[0].get("Χαρακτηριστικό", "Ακίνητο")) if not p_match.empty else "Ακίνητο"
+                p_name = str(p_match.iloc[0].get("Χαρακτηριστικό", "Το ακίνητο")) if not p_match.empty else "Το ακίνητο"
                 
                 t_ids = [t.strip() for t in str(lease.get("Tenant_ID", "")).split(',') if t.strip()]
-                tenant_name, tenant_phone, tenant_email = "Ενοικιαστή", "", ""
-                if t_ids and not tenants_df.empty:
-                    t_match = tenants_df[tenants_df["Tenant_ID"] == t_ids[0]]
+                for t_id in t_ids:
+                    t_match = tenants_df[tenants_df["Tenant_ID"] == t_id]
                     if not t_match.empty:
-                        tenant_name = f"{str(t_match.iloc[0].get('Επώνυμο', ''))} {str(t_match.iloc[0].get('Όνομα', ''))}".strip()
-                        tenant_phone = str(t_match.iloc[0].get('Κινητό', '')).replace('nan', '')
-                        tenant_email = str(t_match.iloc[0].get('Email', '')).replace('nan', '')
+                        t_name = str(t_match.iloc[0].get("Όνομα", ""))
+                        # Αφαιρούμε τυχόν κενά από το τηλέφωνο
+                        t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
+                        
+                        notif_type = f"LEASE_{days_left}_{l_id}_{t_id}"
+                        already_sent = False
+                        if not log_df.empty and 'Type' in log_df.columns:
+                            already_sent = not log_df[log_df['Type'] == notif_type].empty
+                        
+                        if not already_sent and t_phone and t_phone != 'nan':
+                            msg = f"Γεια σας {t_name}. Σας υπενθυμίζουμε ότι το μισθωτήριο για το ακίνητο '{p_name}' λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}). Παρακαλούμε επικοινωνήστε μαζί μας."
+                            pending_notifications.append({
+                                "Type": notif_type, "Target_Phone": t_phone, "Target_Name": f"Ενοικιαστής: {t_name}", 
+                                "Title": f"Λήξη Μίσθωσης σε {days_left} μέρες ({p_name})", "Message": msg, "Urgent": days_left <= 10
+                            })
 
-                msg = f"Αγαπητέ/ή {tenant_name},\n\nΣας ενημερώνουμε ότι το μισθωτήριο συμβόλαιο για το ακίνητο '{prop_charact}' λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΠαρακαλούμε επικοινωνήστε μαζί μας το συντομότερο.\nΜε εκτίμηση."
-                pending_notifications.append({"title": f"📝 Λήξη σε {days_left} μέρες", "name": tenant_name, "phone": tenant_phone, "email": tenant_email, "message": msg, "type": notif_type, "css": "notif-warning" if days_left==10 else "", "entity": prop_charact})
-
-    # =====================================================================
-    # 3. ΕΜΦΑΝΙΣΗ ΚΑΙ ΕΠΕΞΕΡΓΑΣΙΑ ΑΥΤΟΜΑΤΩΝ ΕΙΔΟΠΟΙΗΣΕΩΝ
-    # =====================================================================
-    if not pending_notifications:
-        st.success("🎉 Δεν υπάρχουν εκκρεμείς αυτόματες ειδοποιήσεις για σήμερα!")
-        return
-
-    st.write(f"Βρέθηκαν **{len(pending_notifications)}** αυτόματες εκκρεμότητες:")
-
-    for idx, notif in enumerate(pending_notifications):
-        with st.container(border=True):
-            st.markdown(f"#### {notif['title']} - {notif['entity']}")
-            st.caption(f"📍 Παραλήπτης: **{notif['name']}** | 📞 {notif['phone'] or '---'} | ✉️ {notif['email'] or '---'}")
+    # =============================================================
+    # 2. ΕΛΕΓΧΟΣ ΑΣΦΑΛΙΣΤΗΡΙΩΝ (15, 7 & 2 μέρες πριν τη λήξη)
+    # =============================================================
+    if not insurances_df.empty:
+        for _, ins in insurances_df.iterrows():
+            i_id = str(ins.get("Insurance_ID", ""))
+            try: ren_d = datetime.strptime(str(ins.get("Renewal_Date", "")), "%Y-%m-%d").date()
+            except: continue
             
-            # TEXT AREA ΓΙΑ ΝΑ ΤΟ ΕΠΕΞΕΡΓΑΖΕΣΑΙ ΖΩΝΤΑΝΑ
-            edited_msg = st.text_area("Κείμενο προς αποστολή:", value=notif['message'], height=120, key=f"txt_{notif['type']}")
+            days_left = (ren_d - today).days
             
-            encoded_msg = urllib.parse.quote(edited_msg)
-            clean_phone = str(notif["phone"]).replace(' ', '')
-            if clean_phone and not clean_phone.startswith('+30') and not clean_phone.startswith('0030'): clean_phone = f"+30{clean_phone}"
-
-            sms_link = f"sms:{clean_phone}?body={encoded_msg}" if clean_phone else "#"
-            viber_link = f"viber://chat?number={clean_phone}" if clean_phone else "#"
-            wa_link = f"https://wa.me/{clean_phone.replace('+','')}?text={encoded_msg}" if clean_phone else "#"
-            
-            c1, c2, c3, c4 = st.columns(4)
-            c1.markdown(f'<a href="{viber_link}" class="link-btn btn-viber" target="_blank" style="width:100%;">💜 Viber</a>', unsafe_allow_html=True)
-            c2.markdown(f'<a href="{wa_link}" class="link-btn btn-wa" target="_blank" style="width:100%;">💬 WhatsApp</a>', unsafe_allow_html=True)
-            c3.markdown(f'<a href="{sms_link}" class="link-btn btn-sms" target="_blank" style="width:100%;">📱 SMS App</a>', unsafe_allow_html=True)
-            
-            if c4.button("📧 Άμεση Αποστολή Email", type="primary", use_container_width=True, key=f"em_{notif['type']}"):
-                if notif['email']:
-                    success, res = send_direct_email(notif['email'], "Ενημέρωση από Property Management", edited_msg)
-                    if success: st.success(res)
-                    else: st.error(res)
-                else: st.warning("Δεν υπάρχει καταχωρημένο Email.")
+            if days_left in [15, 7, 2]:
+                p_id = str(ins.get("Property_ID", ""))
+                p_match = properties_df[properties_df["Property_ID"] == p_id] if not properties_df.empty else pd.DataFrame()
+                p_name = str(p_match.iloc[0].get("Χαρακτηριστικό", "Το ακίνητο")) if not p_match.empty else "Το ακίνητο"
                 
-            if st.button(f"✅ Ολοκληρώθηκε (Απόκρυψη από τη λίστα)", use_container_width=True, key=f"done_{notif['type']}"):
-                try:
-                    log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
-                    gsheets_service.add_notification_log([log_id, today.strftime("%Y-%m-%d"), notif['name'], notif['type'], edited_msg])
-                    st.success("Καταγράφηκε!")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e: st.error(f"Σφάλμα καταγραφής: {e}")
+                # Βρίσκουμε δυναμικά το τηλέφωνο του ιδιοκτήτη από το νέο DF Ιδιοκτητών!
+                if not p_match.empty and not owners_df.empty:
+                    prop = p_match.iloc[0]
+                    notified_afms = set() # Αν 1 ιδιοκτήτης έχει 2 ποσοστά, να μην πάρει 2 SMS!
+                    
+                    for i in range(1, 4):
+                        afm = str(prop.get(f'AFM_{i}', '')).strip()
+                        if len(afm) == 8: afm = "0" + afm
+                        
+                        if afm and afm != 'nan' and afm not in notified_afms:
+                            owner_match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == afm.zfill(9)]
+                            if not owner_match.empty:
+                                o_name = str(owner_match.iloc[0].get("Όνομα", ""))
+                                o_phone = str(owner_match.iloc[0].get("Κινητό", "")).replace(" ", "")
+                                
+                                notif_type = f"INS_{days_left}_{i_id}_{afm}"
+                                already_sent = False
+                                if not log_df.empty and 'Type' in log_df.columns:
+                                    already_sent = not log_df[log_df['Type'] == notif_type].empty
+                                
+                                if not already_sent and o_phone and o_phone != 'nan':
+                                    msg = f"Υπενθύμιση ({o_name}): Το ασφαλιστήριο '{ins.get('Category')}' για '{p_name}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
+                                    pending_notifications.append({
+                                        "Type": notif_type, "Target_Phone": o_phone, "Target_Name": f"Ιδιοκτήτης: {o_name}", 
+                                        "Title": f"Λήξη Ασφαλιστηρίου σε {days_left} μέρες ({p_name})", "Message": msg, "Urgent": days_left <= 7
+                                    })
+                                    notified_afms.add(afm)
+
+    # =============================================================
+    # ΟΠΤΙΚΟΠΟΙΗΣΗ (RENDER) ΕΙΔΟΠΟΙΗΣΕΩΝ ΣΤΟ STREAMLIT
+    # =============================================================
+    st.markdown("---")
+    
+    if not pending_notifications:
+        st.success("🎉 Όλα υπό έλεγχο! Δεν υπάρχουν εκκρεμείς ειδοποιήσεις για σήμερα.")
+    else:
+        st.warning(f"Έχετε {len(pending_notifications)} ειδοποιήσεις προς αποστολή.")
+        
+        for idx, notif in enumerate(pending_notifications):
+            urgency_class = "notif-urgent" if notif["Urgent"] else ""
+            
+            with st.container():
+                st.markdown(f"""
+                <div class="notif-card {urgency_class}">
+                    <div class="notif-header">
+                        <div class="notif-title">{notif['Title']}</div>
+                        <div class="notif-target">📱 {notif['Target_Name']} ({notif['Target_Phone']})</div>
+                    </div>
+                    <div class="notif-text">{notif['Message']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Κουμπί Αποστολής
+                if st.button(f"🚀 Αποστολή SMS", key=f"btn_send_{idx}", type="primary"):
+                    with st.spinner("Αποστολή στο κινητό σας..."):
+                        success = send_sms_via_macrodroid(notif["Target_Phone"], notif["Message"])
+                        
+                        if success:
+                            try:
+                                log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
+                                gsheets_service.add_notification_log([
+                                    log_id, 
+                                    today.strftime("%Y-%m-%d"), 
+                                    notif["Target_Name"], 
+                                    notif["Type"], 
+                                    notif["Message"]
+                                ])
+                                st.success("Το SMS προωθήθηκε επιτυχώς!")
+                                time.sleep(1.5)
+                                st.rerun() # Ανανέωση για να φύγει από τη λίστα!
+                            except Exception as e:
+                                st.error(f"Το SMS στάλθηκε, αλλά απέτυχε η καταγραφή στο Sheet: {e}")
