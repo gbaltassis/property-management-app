@@ -5,11 +5,12 @@ import ui_payments
 import ui_registry
 import ui_expenses # Το νέο μας αρχείο
 import ui_reports
+import ui_notifications
 
 st.set_page_config(page_title="Διαχείριση Ακινήτων", page_icon="🏢", layout="wide", initial_sidebar_state="collapsed")
 st.title("Διαχείριση Ακινήτων")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Dashboard", "📝 Μισθώσεις", "💰 Εισπράξεις", "📉 Έξοδα", "⚙️ Μητρώο", "📈 Αναφορές"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📊 Dashboard", "📝 Μισθώσεις", "💰 Εισπράξεις", "📉 Έξοδα", "⚙️ Μητρώο", "📈 Αναφορές", "🔔 Ειδοποιήσεις"])
 
 with tab1: ui_dashboard.show()
 with tab2: ui_leases.show()
