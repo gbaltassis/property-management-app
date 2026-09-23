@@ -17,7 +17,9 @@ def get_worksheet(sheet_name):
     spreadsheet = client.open_by_key(SHEET_ID)
     return spreadsheet.worksheet(sheet_name)
 
-# --- Συναρτήσεις Ανάγνωσης Δεδομένων ---
+# ==============================================================================
+# ΣΥΝΑΡΤΗΣΕΙΣ ΑΝΑΓΝΩΣΗΣ (ΜΕ CACHE ΓΙΑ ΤΑΧΥΤΗΤΑ)
+# ==============================================================================
 @st.cache_data(ttl=300)
 def fetch_all_properties():
     ws = get_worksheet("Properties")
@@ -53,14 +55,42 @@ def fetch_all_expenses():
     if len(data) > 1: return pd.DataFrame(data[1:], columns=data[0])
     return pd.DataFrame(columns=data[0] if data else [])
 
-# --- Συναρτήσεις Εγγραφής Δεδομένων ---
+@st.cache_data(ttl=300)
+def fetch_all_insurances():
+    ws = get_worksheet("Insurances")
+    data = ws.get_all_values()
+    if len(data) > 1: return pd.DataFrame(data[1:], columns=data[0])
+    return pd.DataFrame(columns=data[0] if data else [])
+
+@st.cache_data(ttl=300)
+def fetch_all_owners():
+    ws = get_worksheet("Owners")
+    data = ws.get_all_values()
+    if len(data) > 1: return pd.DataFrame(data[1:], columns=data[0])
+    return pd.DataFrame(columns=data[0] if data else [])
+
+@st.cache_data(ttl=300)
+def fetch_all_notifications_log():
+    ws = get_worksheet("Notifications_Log")
+    data = ws.get_all_values()
+    if len(data) > 1: return pd.DataFrame(data[1:], columns=data[0])
+    return pd.DataFrame(columns=data[0] if data else [])
+
+# ==============================================================================
+# ΣΥΝΑΡΤΗΣΕΙΣ ΕΓΓΡΑΦΗΣ
+# ==============================================================================
 def add_property(data): get_worksheet("Properties").append_row(data); fetch_all_properties.clear()
 def add_tenant(data): get_worksheet("Tenants").append_row(data); fetch_all_tenants.clear()
 def add_lease(data): get_worksheet("Leases").append_row(data); fetch_all_leases.clear()
 def add_payment(data): get_worksheet("Payments").append_row(data); fetch_all_payments.clear()
 def add_expense(data): get_worksheet("Expenses").append_row(data); fetch_all_expenses.clear()
+def add_insurance(data): get_worksheet("Insurances").append_row(data); fetch_all_insurances.clear()
+def add_owner(data): get_worksheet("Owners").append_row(data); fetch_all_owners.clear()
+def add_notification_log(data): get_worksheet("Notifications_Log").append_row(data); fetch_all_notifications_log.clear()
 
-# --- Συναρτήσεις Επεξεργασίας & Διαγραφής (Batch Update) ---
+# ==============================================================================
+# ΣΥΝΑΡΤΗΣΕΙΣ ΕΠΕΞΕΡΓΑΣΙΑΣ & ΔΙΑΓΡΑΦΗΣ
+# ==============================================================================
 def update_row_by_id(sheet_name, row_id, new_data_row, cache_func):
     ws = get_worksheet(sheet_name)
     try:
@@ -81,68 +111,24 @@ def delete_row_by_id(sheet_name, row_id, cache_func):
 
 def update_property(id, row): update_row_by_id("Properties", id, row, fetch_all_properties)
 def delete_property(id): delete_row_by_id("Properties", id, fetch_all_properties)
+
 def update_tenant(id, row): update_row_by_id("Tenants", id, row, fetch_all_tenants)
 def delete_tenant(id): delete_row_by_id("Tenants", id, fetch_all_tenants)
+
 def update_lease(id, row): update_row_by_id("Leases", id, row, fetch_all_leases)
 def delete_lease(id): delete_row_by_id("Leases", id, fetch_all_leases)
+
 def update_payment(id, row): update_row_by_id("Payments", id, row, fetch_all_payments)
 def delete_payment(id): delete_row_by_id("Payments", id, fetch_all_payments)
+
 def update_expense(id, row): update_row_by_id("Expenses", id, row, fetch_all_expenses)
 def delete_expense(id): delete_row_by_id("Expenses", id, fetch_all_expenses)
 
-def fetch_all_insurances():
-    worksheet = get_worksheet("Insurances")
-    if not worksheet: return pd.DataFrame()
-    data = worksheet.get_all_records()
-    return pd.DataFrame(data)
+def update_insurance(id, row): update_row_by_id("Insurances", id, row, fetch_all_insurances)
+def delete_insurance(id): delete_row_by_id("Insurances", id, fetch_all_insurances)
 
-def add_insurance(row_data):
-    worksheet = get_worksheet("Insurances")
-    worksheet.append_row(row_data)
-
-def update_insurance(ins_id, row_data):
-    worksheet = get_worksheet("Insurances")
-    cell = worksheet.find(ins_id, in_column=1)
-    if cell:
-        worksheet.update(f"A{cell.row}:J{cell.row}", [row_data])
-
-def delete_insurance(ins_id):
-    worksheet = get_worksheet("Insurances")
-    cell = worksheet.find(ins_id, in_column=1)
-    if cell:
-        worksheet.delete_rows(cell.row)
-
-# --- NOTIFICATIONS LOG ---
-def fetch_all_notifications():
-    sheet = client.open(SPREADSHEET_NAME).worksheet("Notifications_Log")
-    records = sheet.get_all_records()
-    return pd.DataFrame(records)
-
-def add_notification_log(row_data):
-    sheet = client.open(SPREADSHEET_NAME).worksheet("Notifications_Log")
-    sheet.append_row(row_data)
-
-def fetch_all_owners():
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    return conn.read(worksheet="Owners", usecols=list(range(6)))
-
-def add_owner(row_data):
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    conn.insert(worksheet="Owners", data=[row_data])
-
-def update_owner(owner_id, new_row_data):
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(worksheet="Owners", usecols=list(range(6)))
-    if not df.empty and 'Owner_ID' in df.columns:
-        idx = df.index[df['Owner_ID'] == owner_id].tolist()
-        if idx:
-            conn.update(worksheet="Owners", data=[new_row_data], range=f"A{idx[0]+2}:F{idx[0]+2}")
-
-def delete_owner(owner_id):
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(worksheet="Owners", usecols=list(range(6)))
-    if not df.empty and 'Owner_ID' in df.columns:
-        idx = df.index[df['Owner_ID'] == owner_id].tolist()
-        if idx:
-            blank_row = [owner_id, "ΔΙΑΓΡΑΜΜΕΝΟ", "-", "-", "-", "-"]
-            conn.update(worksheet="Owners", data=[blank_row], range=f"A{idx[0]+2}:F{idx[0]+2}")
+def update_owner(id, row): update_row_by_id("Owners", id, row, fetch_all_owners)
+def delete_owner(id):
+    # Αντί για delete (επειδή μπορεί να χαλάσουν οι συνδέσεις), κρατάμε τη γραμμή με "ΔΙΑΓΡΑΜΜΕΝΟ"
+    blank_row = [id, "ΔΙΑΓΡΑΜΜΕΝΟ", "-", "-", "-", "-"]
+    update_row_by_id("Owners", id, blank_row, fetch_all_owners)
