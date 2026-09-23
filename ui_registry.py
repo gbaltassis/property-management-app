@@ -24,8 +24,7 @@ COMMON_CSS = """
     .custom-table th:first-child, .custom-table td:first-child { 
         position: sticky; left: 0; z-index: 3; background-color: #ffffff; 
         box-shadow: 1px 0 0 #ddd; font-weight: 600; 
-        min-width: 80px; max-width: 120px; 
-        white-space: normal !important; word-wrap: break-word; 
+        min-width: 80px; max-width: 120px; white-space: normal !important; word-wrap: break-word; 
     }
     .custom-table th:first-child { z-index: 5; background-color: #f0f2f6; box-shadow: 1px 1px 0 #ddd; }
     .action-btn { display: block; width: 100%; background-color: #f8f9fa; border: 1px solid #ddd; padding: 4px; border-radius: 4px; cursor: pointer; color: #31333F; font-size: 11px; font-weight: bold; transition: 0.2s; text-align: center; }
@@ -98,6 +97,7 @@ COMMON_JS = """
 </script>
 """
 
+# HANDLERS
 def handle_prop_action():
     key = st.session_state.current_prop_hidden_key
     val = st.session_state.get(key, "")
@@ -118,6 +118,16 @@ def handle_tenant_action():
             st.session_state.action_tenant_id = parts[0].replace("EDIT_", "")
         st.session_state[key] = ""
 
+def handle_owner_action():
+    key = st.session_state.current_owner_hidden_key
+    val = st.session_state.get(key, "")
+    if val:
+        parts = val.split('|')
+        if parts[0].startswith("EDIT_"):
+            st.session_state.owner_action = 'edit'
+            st.session_state.action_owner_id = parts[0].replace("EDIT_", "")
+        st.session_state[key] = ""
+
 def handle_ins_action():
     key = st.session_state.current_ins_hidden_key
     val = st.session_state.get(key, "")
@@ -129,30 +139,43 @@ def handle_ins_action():
         st.session_state[key] = ""
 
 def show():
-    for key in ["prop_action", "action_prop_id", "tenant_action", "action_tenant_id", "ins_action", "action_ins_id"]:
-        if key not in st.session_state: st.session_state[key] = None
+    for k in ["prop_action", "action_prop_id", "tenant_action", "action_tenant_id", "owner_action", "action_owner_id", "ins_action", "action_ins_id"]:
+        if k not in st.session_state: st.session_state[k] = None
 
-    if "current_prop_hidden_key" not in st.session_state: st.session_state.current_prop_hidden_key = f"h_prop_{uuid.uuid4().hex[:6]}"
-    if "current_tenant_hidden_key" not in st.session_state: st.session_state.current_tenant_hidden_key = f"h_ten_{uuid.uuid4().hex[:6]}"
-    if "current_ins_hidden_key" not in st.session_state: st.session_state.current_ins_hidden_key = f"h_ins_{uuid.uuid4().hex[:6]}"
+    if "current_prop_hidden_key" not in st.session_state: st.session_state.current_prop_hidden_key = f"h_p_{uuid.uuid4().hex[:6]}"
+    if "current_tenant_hidden_key" not in st.session_state: st.session_state.current_tenant_hidden_key = f"h_t_{uuid.uuid4().hex[:6]}"
+    if "current_owner_hidden_key" not in st.session_state: st.session_state.current_owner_hidden_key = f"h_o_{uuid.uuid4().hex[:6]}"
+    if "current_ins_hidden_key" not in st.session_state: st.session_state.current_ins_hidden_key = f"h_i_{uuid.uuid4().hex[:6]}"
 
     st.text_input("hidden_prop_click", key=st.session_state.current_prop_hidden_key, label_visibility="collapsed", on_change=handle_prop_action)
     st.text_input("hidden_tenant_click", key=st.session_state.current_tenant_hidden_key, label_visibility="collapsed", on_change=handle_tenant_action)
+    st.text_input("hidden_owner_click", key=st.session_state.current_owner_hidden_key, label_visibility="collapsed", on_change=handle_owner_action)
     st.text_input("hidden_ins_click", key=st.session_state.current_ins_hidden_key, label_visibility="collapsed", on_change=handle_ins_action)
 
     st.header("Μητρώο")
-    st.caption("Διαχείριση και επισκόπηση του χαρτοφυλακίου ακινήτων, του πελατολογίου και των συμβολαίων.")
+    st.caption("Διαχείριση και επισκόπηση του χαρτοφυλακίου ακινήτων, ιδιοκτητών, πελατολογίου και συμβολαίων.")
 
     try:
         properties_df = gsheets_service.fetch_all_properties()
         tenants_df = gsheets_service.fetch_all_tenants()
         leases_df = gsheets_service.fetch_all_leases()
         insurances_df = gsheets_service.fetch_all_insurances()
+        try: owners_df = gsheets_service.fetch_all_owners()
+        except: owners_df = pd.DataFrame(columns=["Owner_ID", "Όνομα", "Επώνυμο", "ΑΦΜ", "Κινητό", "Email"])
     except Exception as e:
         st.error(f"Σφάλμα κατά τη φόρτωση δεδομένων: {e}")
         return
 
-    main_tab_prop, main_tab_tenant, main_tab_ins = st.tabs(["🏢 Ακίνητα", "👥 Ενοικιαστές", "🛡️ Ασφαλιστήρια"])
+    owner_options = {}
+    if not owners_df.empty:
+        for _, row in owners_df.iterrows():
+            afm_str = str(row.get('ΑΦΜ', '')).strip()
+            if len(afm_str) == 8: afm_str = "0" + afm_str
+            if afm_str and afm_str != 'nan':
+                owner_options[afm_str] = f"{str(row.get('Επώνυμο', ''))} {str(row.get('Όνομα', ''))} ({afm_str})"
+
+    # --- TABS (Προστέθηκε η καρτέλα Ιδιοκτήτες) ---
+    main_tab_prop, main_tab_owner, main_tab_tenant, main_tab_ins = st.tabs(["🏢 Ακίνητα", "👑 Ιδιοκτήτες", "👥 Ενοικιαστές", "🛡️ Ασφαλιστήρια"])
 
     # =====================================================================
     # 1. ΑΚΙΝΗΤΑ
@@ -184,22 +207,32 @@ def show():
                 extra_months = st.multiselect("Επιλέξτε Μήνες που εκδίδονται Λογαριασμοί", options=list(MONTHS_DICT.keys()), format_func=lambda x: MONTHS_DICT[x])
                 
                 st.subheader("Ιδιοκτήτες")
+                if owners_df.empty: st.warning("⚠️ Προσθέστε πρώτα τους Ιδιοκτήτες στο Μητρώο (Καρτέλα 'Ιδιοκτήτες').")
+                
                 owner_data = []
+                o_keys = [""] + list(owner_options.keys())
                 for i in range(1, 4):
                     with st.expander(f"Ιδιοκτήτης {i}", expanded=(i==1)):
-                        c1, c2 = st.columns(2)
-                        n = c1.text_input(f"Όνομα", key=f"n{i}")
-                        s = c2.text_input(f"Επώνυμο", key=f"s{i}")
-                        c3, c4, c5 = st.columns(3)
-                        afm = c3.text_input(f"ΑΦΜ", key=f"afm{i}")
+                        sel_afm = st.selectbox("Επιλογή Ιδιοκτήτη", options=o_keys, format_func=lambda x: owner_options.get(x, "Επιλέξτε...") if x else "Επιλέξτε...", key=f"sel_o_{i}")
+                        c4, c5 = st.columns(2)
                         right = c4.selectbox(f"Είδος", ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"], key=f"r{i}")
                         perc_input = c5.text_input(f"Ποσοστό %", value="100" if i==1 else "0", key=f"p{i}")
-                        owner_data.extend([n, s, afm, right, perc_input])
+                        
+                        # Ανάκτηση ονόματος/επωνύμου από το DataFrame
+                        n, s = "", ""
+                        if sel_afm:
+                            match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == sel_afm.zfill(9)]
+                            if not match.empty:
+                                n = str(match.iloc[0].get('Όνομα', ''))
+                                s = str(match.iloc[0].get('Επώνυμο', ''))
+                                
+                        owner_data.extend([n, s, sel_afm, right, perc_input])
                     
                 if st.form_submit_button("Αποθήκευση Ακινήτου", type="primary", use_container_width=True):
                     sqm_val = pd.to_numeric(sqm_input.replace(',', '.'), errors='coerce')
                     if pd.isna(sqm_val): sqm_val = 0.0
-                    if charact and atak and address and sqm_val > 0 and owner_data[0]:
+                    
+                    if charact and atak and address and sqm_val > 0 and owner_data[2]: # owner_data[2] is AFM of Owner 1
                         try:
                             extra_str = ",".join(map(str, extra_months))
                             gsheets_service.add_property([f"PR-{uuid.uuid4().hex[:6].upper()}", atak, nomos, dimos, address, number, floor, sqm_input, charact] + owner_data + [extra_str, prop_val, "", fixed_exp])
@@ -208,7 +241,7 @@ def show():
                             st.session_state.prop_action = None
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
-                    else: st.warning("Συμπληρώστε τα υποχρεωτικά πεδία και τον 1ο Ιδιοκτήτη.")
+                    else: st.warning("Συμπληρώστε τα υποχρεωτικά πεδία και επιλέξτε τον 1ο Ιδιοκτήτη.")
 
         elif st.session_state.prop_action == 'edit':
             st.markdown("### ✏️ Επεξεργασία Ακινήτου")
@@ -242,17 +275,36 @@ def show():
                 e_owner_data = []
                 for i in range(1, 4):
                     with st.expander(f"Ιδιοκτήτης {i}", expanded=(i==1)):
-                        rc1, rc2 = st.columns(2)
-                        n, s = rc1.text_input(f"Όνομα", key=f"en{i}", value=str(sel_prop.get(f"Name_{i}", ""))), rc2.text_input(f"Επώνυμο", key=f"es{i}", value=str(sel_prop.get(f"Surname_{i}", "")))
-                        rc3, rc4, rc5 = st.columns(3)
-                        afm_val = str(sel_prop.get(f"AFM_{i}", ""))
-                        if len(afm_val) == 8: afm_val = "0" + afm_val
-                        afm = rc3.text_input(f"ΑΦΜ", key=f"eafm{i}", value=afm_val)
+                        # Ελέγχουμε αν υπάρχει ήδη ΑΦΜ από παλιά καταχώρηση
+                        curr_afm = str(sel_prop.get(f"AFM_{i}", "")).strip()
+                        if len(curr_afm) == 8: curr_afm = "0" + curr_afm
+                        
+                        temp_options = owner_options.copy()
+                        if curr_afm and curr_afm != "nan" and curr_afm not in temp_options:
+                            temp_options[curr_afm] = f"{sel_prop.get(f'Surname_{i}','')} {sel_prop.get(f'Name_{i}','')} (Μη εγγεγραμμένος)"
+                        
+                        o_keys = [""] + list(temp_options.keys())
+                        try: o_idx = o_keys.index(curr_afm)
+                        except: o_idx = 0
+                        
+                        sel_afm = st.selectbox("Επιλογή Ιδιοκτήτη", options=o_keys, index=o_idx, format_func=lambda x: temp_options.get(x, "Επιλέξτε...") if x else "Επιλέξτε...", key=f"e_sel_o_{i}")
+                        
                         r_opts, curr_r = ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"], str(sel_prop.get(f"Right_{i}", ""))
-                        right = rc4.selectbox(f"Είδος", r_opts, index=r_opts.index(curr_r) if curr_r in r_opts else 0, key=f"er{i}")
+                        c4, c5 = st.columns(2)
+                        right = c4.selectbox(f"Είδος", r_opts, index=r_opts.index(curr_r) if curr_r in r_opts else 0, key=f"er{i}")
                         p_val = str(sel_prop.get(f"Perc_{i}", "")).replace('.', ',')
-                        perc = rc5.text_input(f"Ποσοστό %", value="0" if p_val == "" else p_val, key=f"ep{i}")
-                        e_owner_data.extend([n, s, afm, right, perc])
+                        perc = c5.text_input(f"Ποσοστό %", value="0" if p_val == "" else p_val, key=f"ep{i}")
+                        
+                        n, s = "", ""
+                        if sel_afm:
+                            if sel_afm == curr_afm and curr_afm not in owner_options:
+                                n, s = str(sel_prop.get(f"Name_{i}", "")), str(sel_prop.get(f"Surname_{i}", ""))
+                            else:
+                                match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == sel_afm.zfill(9)]
+                                if not match.empty:
+                                    n, s = str(match.iloc[0].get('Όνομα', '')), str(match.iloc[0].get('Επώνυμο', ''))
+                                    
+                        e_owner_data.extend([n, s, sel_afm, right, perc])
                         
                 update_btn = st.form_submit_button("Αποθήκευση Αλλαγών", type="primary", use_container_width=True)
                 
@@ -324,6 +376,123 @@ def show():
                 
             if st.button("➕ Νέο Ακίνητο", type="primary", use_container_width=True):
                 st.session_state.prop_action = 'new'
+                st.rerun()
+
+    # =====================================================================
+    # 1Β. ΙΔΙΟΚΤΗΤΕΣ (ΝΕΑ ΚΑΡΤΕΛΑ)
+    # =====================================================================
+    with main_tab_owner:
+        if st.session_state.owner_action == 'new':
+            st.markdown("### ➕ Νέος Ιδιοκτήτης")
+            col_back, _ = st.columns([1, 4])
+            if col_back.button("⬅️ Επιστροφή", key="back_owner_new", use_container_width=True):
+                st.session_state.owner_action = None
+                st.rerun()
+
+            with st.form("new_owner_form", clear_on_submit=True):
+                fname, lname, afm = st.text_input("Όνομα *"), st.text_input("Επώνυμο *"), st.text_input("ΑΦΜ *")
+                phone, email = st.text_input("Κινητό Τηλέφωνο"), st.text_input("Email")
+                if st.form_submit_button("Αποθήκευση Ιδιοκτήτη", type="primary", use_container_width=True):
+                    if fname and lname and afm:
+                        try:
+                            gsheets_service.add_owner([f"OW-{uuid.uuid4().hex[:6].upper()}", fname, lname, afm, phone, email])
+                            st.success("Ο Ιδιοκτήτης αποθηκεύτηκε!")
+                            time.sleep(1.5)
+                            st.session_state.owner_action = None
+                            st.rerun()
+                        except Exception as e: st.error(f"Σφάλμα: {e}")
+                    else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
+
+        elif st.session_state.owner_action == 'edit':
+            st.markdown("### ✏️ Επεξεργασία Ιδιοκτήτη")
+            col_back, _ = st.columns([1, 4])
+            if col_back.button("⬅️ Επιστροφή", key="back_owner_edit", use_container_width=True):
+                st.session_state.owner_action = None
+                st.rerun()
+
+            sel_ow = owners_df[owners_df["Owner_ID"] == st.session_state.action_owner_id].iloc[0]
+            with st.form("edit_owner_form"):
+                e_o_fname, e_o_lname = st.text_input("Όνομα *", value=str(sel_ow.get("Όνομα", ""))), st.text_input("Επώνυμο *", value=str(sel_ow.get("Επώνυμο", "")))
+                afm_v = str(sel_ow.get("ΑΦΜ", ""))
+                if len(afm_v) == 8: afm_v = "0" + afm_v
+                e_o_afm = st.text_input("ΑΦΜ *", value=afm_v)
+                e_o_phone, e_o_email = st.text_input("Κινητό Τηλέφωνο", value=str(sel_ow.get("Κινητό", ""))), st.text_input("Email", value=str(sel_ow.get("Email", "")))
+                upd_o_btn = st.form_submit_button("Αποθήκευση Αλλαγών", type="primary", use_container_width=True)
+                
+            if st.button("🗑️ Οριστική Διαγραφή Ιδιοκτήτη", use_container_width=True):
+                try:
+                    gsheets_service.delete_owner(st.session_state.action_owner_id)
+                    st.success("Ο Ιδιοκτήτης διαγράφηκε!")
+                    time.sleep(1.5)
+                    st.session_state.owner_action = None
+                    st.rerun()
+                except Exception as e: st.error(f"Σφάλμα: {e}")
+
+            if upd_o_btn:
+                if e_o_fname and e_o_lname and e_o_afm:
+                    try:
+                        gsheets_service.update_owner(st.session_state.action_owner_id, [st.session_state.action_owner_id, e_o_fname, e_o_lname, e_o_afm, e_o_phone, e_o_email])
+                        st.success("Αποθηκεύτηκαν!")
+                        time.sleep(1.5)
+                        st.session_state.owner_action = None
+                        st.rerun()
+                    except Exception as e: st.error(f"Σφάλμα: {e}")
+                else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
+
+        else:
+            # Λίστα Ιδιοκτητών που δεν έχουν διαγραφεί (blank rows check)
+            valid_owners = owners_df[owners_df["Όνομα"] != "ΔΙΑΓΡΑΜΜΕΝΟ"] if not owners_df.empty else pd.DataFrame()
+            
+            if valid_owners.empty: 
+                st.info("Δεν υπάρχουν καταχωρημένοι ιδιοκτήτες. Προσθέστε για να τους συνδέετε εύκολα με τα Ακίνητα!")
+            else:
+                html_code = f"""
+                <!DOCTYPE html><html><head><style>{COMMON_CSS}</style></head><body>
+                <div class="table-container">
+                    <table id="owner-table" class="custom-table">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTable('owner-table', 0)">Συνδεδεμένα Ακίνητα ⇕</th>
+                                <th onclick="sortTable('owner-table', 1)">Ονοματεπώνυμο ⇕</th>
+                                <th onclick="sortTable('owner-table', 2)">ΑΦΜ ⇕</th>
+                                <th onclick="sortTable('owner-table', 3)">Επικοινωνία ⇕</th>
+                                <th>Ενέργεια</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                """
+                for _, ow in valid_owners.iterrows():
+                    o_id = str(ow.get("Owner_ID", ""))
+                    o_afm = str(ow.get("ΑΦΜ", "")).strip()
+                    if len(o_afm) == 8: o_afm = "0" + o_afm
+                    
+                    linked_props = []
+                    if o_afm and not properties_df.empty:
+                        for _, p in properties_df.iterrows():
+                            for i in range(1, 4):
+                                p_afm = str(p.get(f'AFM_{i}', '')).strip()
+                                if len(p_afm) == 8: p_afm = "0" + p_afm
+                                if p_afm == o_afm:
+                                    linked_props.append(str(p.get('Χαρακτηριστικό', '')))
+                                    break
+                    
+                    props_str = ", ".join(linked_props) if linked_props else "-"
+                    
+                    html_code += f"""
+                        <tr>
+                            <td><strong>{props_str}</strong></td>
+                            <td>{str(ow.get('Επώνυμο', ''))} {str(ow.get('Όνομα', ''))}</td>
+                            <td>{o_afm}</td>
+                            <td>{str(ow.get('Κινητό', ''))} | {str(ow.get('Email', ''))}</td>
+                            <td><button class="action-btn" onclick="triggerPython('EDIT_{o_id}', 'hidden_owner_click')">✏️ Επεξ.</button></td>
+                        </tr>
+                    """
+                html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
+                t_height = min(600, 70 + len(valid_owners) * 45)
+                components.html(html_code, height=t_height, scrolling=False)
+
+            if st.button("➕ Νέος Ιδιοκτήτης", type="primary", use_container_width=True):
+                st.session_state.owner_action = 'new'
                 st.rerun()
 
     # =====================================================================
