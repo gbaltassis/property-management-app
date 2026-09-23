@@ -18,3 +18,4 @@ with tab3: ui_payments.show()
 with tab4: ui_expenses.show() # Καλεί το νέο αρχείο
 with tab5: ui_registry.show()
 with tab6: ui_reports.show()
+with tab7: ui_notifications.show()
