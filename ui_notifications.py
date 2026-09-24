@@ -194,6 +194,7 @@ def show():
             p_street = str(p_match.iloc[0].get("Διεύθυνση", "-")) if not p_match.empty else "-"
             p_num = str(p_match.iloc[0].get("Αριθμός", "")) if not p_match.empty else ""
 
+            # Εύρεση όλων των ενοικιαστών
             t_ids = [t.strip() for t in str(lease.get("Tenant_ID", "")).split(',') if t.strip()]
             t_full_names, t_phones = [], []
             for t_id in t_ids:
@@ -204,6 +205,20 @@ def show():
             
             t_names_str = ", ".join(t_full_names) if t_full_names else "Άγνωστος Ενοικιαστής"
             t_phones_str = ", ".join(t_phones) if t_phones else "-"
+
+            # Συγκέντρωση όλων των Ιδιοκτητών 
+            o_full_names = []
+            if not p_match.empty and not owners_df.empty:
+                prop = p_match.iloc[0]
+                for i in range(1, 4):
+                    afm_raw = str(prop.get(f'AFM_{i}', '')).strip()
+                    if len(afm_raw) == 8: afm_raw = "0" + afm_raw
+                    if afm_raw and afm_raw != 'nan':
+                        o_match_global = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == afm_raw.zfill(9)]
+                        if not o_match_global.empty:
+                            o_raw = f"{o_match_global.iloc[0].get('Όνομα', '')} {o_match_global.iloc[0].get('Επώνυμο', '')}".strip()
+                            o_full_names.append(o_raw)
+            o_names_str = ", ".join(o_full_names) if o_full_names else "Άγνωστος Ιδιοκτήτης"
 
             # --- ΑΥΤΟΜΑΤΕΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ΙΔΙΟΚΤΗΤΩΝ ΓΙΑ ΛΗΞΗ ΜΙΣΘΩΣΗΣ ---
             if days_left in [20, 10, 2] and not p_match.empty and not owners_df.empty:
@@ -216,16 +231,22 @@ def show():
                         o_match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == afm.zfill(9)]
                         if not o_match.empty:
                             o_raw_name = f"{o_match.iloc[0].get('Όνομα', '')} {o_match.iloc[0].get('Επώνυμο', '')}".strip()
+                            o_email = str(o_match.iloc[0].get("Email", ""))
+                            o_phone = str(o_match.iloc[0].get("Κινητό", "")).replace(" ", "")
+
+                            # Συναρμολόγηση Προσφώνησης Ιδιοκτήτη (Τίτλος + Όνομα)
+                            o_title = str(o_match.iloc[0].get("Τίτλος", "")).strip()
+                            if not o_title or o_title == 'nan': o_title = "Αγαπητέ Κύριε/Κυρία"
+                            
                             o_prosfonisi = str(o_match.iloc[0].get("Προσφώνηση", "")).strip()
                             o_vocative = o_prosfonisi if o_prosfonisi and o_prosfonisi != 'nan' else o_raw_name
                             
-                            o_email = str(o_match.iloc[0].get("Email", ""))
-                            o_phone = str(o_match.iloc[0].get("Κινητό", "")).replace(" ", "")
+                            o_greeting = f"{o_title} {o_vocative}".strip()
 
                             email_type = f"AUTO_OWNER_LEASE_EMAIL_{days_left}_{l_id}_{afm}"
                             if not check_already_sent(log_df, email_type, today_str):
                                 subject = f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
-                                body = f"Αγαπητέ Κύριε/Κυρία {o_vocative},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την πρόθεση του για ανανέωση. Εάν δεν επιθυμεί την ανανέωση της μίσθωσης, προχωρήστε σε έλεγχο του ακινήτου για την διευθέτηση τυχόν ζημιών/φθορών από κακή χρήση στο ακίνητο ώστε να κριθεί εάν θα του επιστραφεί ή όχι η εγγύηση που σας είχε καταβάλλει."
+                                body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την πρόθεση του για ανανέωση. Εάν δεν επιθυμεί την ανανέωση της μίσθωσης, προχωρήστε σε έλεγχο του ακινήτου για την διευθέτηση τυχόν ζημιών/φθορών από κακή χρήση στο ακίνητο ώστε να κριθεί εάν θα του επιστραφεί ή όχι η εγγύηση που σας είχε καταβάλλει."
                                 if send_via_email(o_email, subject, body):
                                     gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Λήξη Μίσθωσης"])
                                     st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για λήξη μίσθωσης.")
@@ -246,15 +267,21 @@ def show():
                     t_match = tenants_df[tenants_df["Tenant_ID"] == t_id]
                     if not t_match.empty:
                         t_name = str(t_match.iloc[0].get("Όνομα", ""))
-                        t_prosfonisi = str(t_match.iloc[0].get("Προσφώνηση", "")).strip()
-                        t_vocative = t_prosfonisi if t_prosfonisi and t_prosfonisi != 'nan' else t_name
-                        
                         t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
                         t_email = str(t_match.iloc[0].get("Email", ""))
                         
+                        # Συναρμολόγηση Προσφώνησης Ενοικιαστή (Τίτλος + Όνομα)
+                        t_title = str(t_match.iloc[0].get("Τίτλος", "")).strip()
+                        if not t_title or t_title == 'nan': t_title = "Γεια σας"
+                        
+                        t_prosfonisi = str(t_match.iloc[0].get("Προσφώνηση", "")).strip()
+                        t_vocative = t_prosfonisi if t_prosfonisi and t_prosfonisi != 'nan' else t_name
+                        
+                        t_greeting = f"{t_title} {t_vocative}".strip()
+                        
                         notif_type = f"LEASE_{days_left}_{l_id}_{t_id}"
                         if not check_already_sent(log_df, notif_type, today_str):
-                            msg = f"Γεια σας {t_vocative}. Σας υπενθυμίζουμε ότι το μισθωτήριο για το ακίνητο '{p_char}' λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}). Παρακαλούμε επικοινωνήστε μαζί μας."
+                            msg = f"{t_greeting}. Σας υπενθυμίζουμε ότι το μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}). Ιδιοκτήτης/ες: {o_names_str}"
                             pending_notifications.append({
                                 "Type": notif_type, "Property_Name": p_char, "Kind": "Λήξη Μισθωτηρίου",
                                 "Date": end_d.strftime('%d/%m/%Y'), "Target_Phone": t_phone, "Target_Email": t_email, 
@@ -287,15 +314,20 @@ def show():
                             owner_match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == afm.zfill(9)]
                             if not owner_match.empty:
                                 o_name = str(owner_match.iloc[0].get("Όνομα", ""))
-                                o_prosfonisi = str(owner_match.iloc[0].get("Προσφώνηση", "")).strip()
-                                o_vocative = o_prosfonisi if o_prosfonisi and o_prosfonisi != 'nan' else o_name
-                                
                                 o_phone = str(owner_match.iloc[0].get("Κινητό", "")).replace(" ", "")
                                 o_email = str(owner_match.iloc[0].get("Email", ""))
                                 
+                                o_title = str(owner_match.iloc[0].get("Τίτλος", "")).strip()
+                                if not o_title or o_title == 'nan': o_title = "Αγαπητέ Κύριε/Κυρία"
+                                
+                                o_prosfonisi = str(owner_match.iloc[0].get("Προσφώνηση", "")).strip()
+                                o_vocative = o_prosfonisi if o_prosfonisi and o_prosfonisi != 'nan' else o_name
+                                
+                                o_greeting = f"{o_title} {o_vocative}".strip()
+                                
                                 notif_type = f"INS_{days_left}_{i_id}_{afm}"
                                 if not check_already_sent(log_df, notif_type, today_str):
-                                    msg = f"Αξιότιμε/η {o_vocative}, σας ενημερώνουμε ότι το ασφαλιστήριο ({ins.get('Category')}) για το '{p_char}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
+                                    msg = f"{o_greeting},\n\nΣας ενημερώνουμε ότι το ασφαλιστήριο ({ins.get('Category')}) για το '{p_char}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
                                     pending_notifications.append({
                                         "Type": notif_type, "Property_Name": p_char, "Kind": f"Ασφάλεια ({ins.get('Category', '')})",
                                         "Date": ren_d.strftime('%d/%m/%Y'), "Target_Phone": o_phone, "Target_Email": o_email, 
@@ -361,15 +393,20 @@ def show():
                         o_match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == afm.zfill(9)]
                         if not o_match.empty:
                             o_raw_name = f"{o_match.iloc[0].get('Όνομα', '')} {o_match.iloc[0].get('Επώνυμο', '')}".strip()
+                            o_email = str(o_match.iloc[0].get("Email", ""))
+                            
+                            o_title = str(o_match.iloc[0].get("Τίτλος", "")).strip()
+                            if not o_title or o_title == 'nan': o_title = "Αγαπητέ Κύριε/Κυρία"
+                            
                             o_prosfonisi = str(o_match.iloc[0].get("Προσφώνηση", "")).strip()
                             o_vocative = o_prosfonisi if o_prosfonisi and o_prosfonisi != 'nan' else o_raw_name
                             
-                            o_email = str(o_match.iloc[0].get("Email", ""))
+                            o_greeting = f"{o_title} {o_vocative}".strip()
                             
                             email_type = f"AUTO_OWNER_PAY_EMAIL_{days_late}_{pay_id}_{afm}"
                             if not check_already_sent(log_df, email_type, today_str):
                                 subject = f"ΕΙΔΟΠΟΙΗΣΗ ΕΚΚΡΕΜΟΥΣ ΟΦΕΙΛΗΣ {p_char}"
-                                body = f"Αγαπητέ Κύριε/Κυρία {o_vocative},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί η οφειλή για το {pay_type}, {pay_desc}, από τις {pay_date_str}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
+                                body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί η οφειλή για το {pay_type}, {pay_desc}, από τις {pay_date_str}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
                                 if send_via_email(o_email, subject, body):
                                     gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Οφειλή"])
                                     st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για εκκρεμή οφειλή.")
@@ -380,15 +417,20 @@ def show():
                 t_match = tenants_df[tenants_df["Tenant_ID"] == t_id] if 'Tenant_ID' in tenants_df.columns else pd.DataFrame()
                 if not t_match.empty:
                     t_name = str(t_match.iloc[0].get("Όνομα", ""))
-                    t_prosfonisi = str(t_match.iloc[0].get("Προσφώνηση", "")).strip()
-                    t_vocative = t_prosfonisi if t_prosfonisi and t_prosfonisi != 'nan' else t_name
-                    
                     t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
                     t_email = str(t_match.iloc[0].get("Email", ""))
                     
+                    t_title = str(t_match.iloc[0].get("Τίτλος", "")).strip()
+                    if not t_title or t_title == 'nan': t_title = "Γεια σας"
+                    
+                    t_prosfonisi = str(t_match.iloc[0].get("Προσφώνηση", "")).strip()
+                    t_vocative = t_prosfonisi if t_prosfonisi and t_prosfonisi != 'nan' else t_name
+                    
+                    t_greeting = f"{t_title} {t_vocative}".strip()
+                    
                     notif_type = f"PAY_{pay_id}_{t_id}"
                     if not check_already_sent(log_df, notif_type, today_str):
-                        msg = f"Γεια σας {t_vocative}. Υπενθύμιση: Εκκρεμεί η εξόφληση ποσού {amount}€ για το '{p_char}'. Παρακαλούμε για την τακτοποίησή της το συντομότερο."
+                        msg = f"{t_greeting}. Υπενθύμιση: Εκκρεμεί η εξόφληση ποσού {amount}€ για το '{p_char}'. Παρακαλούμε για την τακτοποίησή της το συντομότερο."
                         pending_notifications.append({
                             "Type": notif_type, "Property_Name": p_char, "Kind": f"{pay_type} ({amount}€)",
                             "Date": pay_date_str, "Target_Phone": t_phone, "Target_Email": t_email, 
@@ -421,7 +463,7 @@ def show():
                 st.write("") 
                 final_message = st.text_area("📝 Προτεινόμενο κείμενο μηνύματος (Επεξεργάσιμο):", value=notif['Default_Message'], height=100, key=f"msg_{idx}")
                 
-                b1, b2 = st.columns(2)
+                b1, b2, b3 = st.columns(3)
                 
                 if b1.button("📱 SMS", key=f"btn_sms_{idx}", type="primary", use_container_width=True):
                     with st.spinner("Αποστολή SMS..."):
@@ -438,5 +480,14 @@ def show():
                             log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
                             gsheets_service.add_notification_log([log_id, today_str, notif["Target_Name"], notif["Type"], f"[WhatsApp] {final_message}"])
                             st.success("Η εντολή WhatsApp στάλθηκε!")
+                            time.sleep(1)
+                            st.rerun()
+                            
+                if b3.button("📧 Email", key=f"btn_em_{idx}", type="primary", use_container_width=True):
+                    with st.spinner("Αποστολή Email..."):
+                        if send_via_email(notif["Target_Email"], "Ενημέρωση Οφειλής" if "Οφειλή" in notif['Title'] else "Ενημέρωση Ακινήτου", final_message):
+                            log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
+                            gsheets_service.add_notification_log([log_id, today_str, notif["Target_Name"], notif["Type"], f"[Email] {final_message}"])
+                            st.success("Το Email στάλθηκε!")
                             time.sleep(1)
                             st.rerun()
