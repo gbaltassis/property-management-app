@@ -259,12 +259,13 @@ def show():
                                     st.toast(f"✅ Εστάλη αυτόματο SMS στον/στην {o_raw_name} για λήξη μίσθωσης.")
                                     auto_triggered_count += 1
 
-            # --- ΧΕΙΡΟΚΙΝΗΤΕΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ΕΝΟΙΚΙΑΣΤΩΝ ΣΤΗΝ ΟΘΟΝΗ (30 & 10 Μέρες) ---
-            if days_left in [30, 10]:
+            # --- ΑΥΤΟΜΑΤΕΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ΕΝΟΙΚΙΑΣΤΩΝ (ΜΟΝΟ ΣΤΙΣ 30 ΗΜΕΡΕΣ, EMAIL & SMS) ---
+            if days_left == 30:
                 for t_id in t_ids:
                     t_match = tenants_df[tenants_df["Tenant_ID"] == t_id]
                     if not t_match.empty:
                         t_name = str(t_match.iloc[0].get("Όνομα", ""))
+                        t_raw_name = f"{t_name} {t_match.iloc[0].get('Επώνυμο', '')}".strip()
                         t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
                         t_email = str(t_match.iloc[0].get("Email", ""))
                         
@@ -276,16 +277,24 @@ def show():
                         
                         t_greeting = f"{t_title} {t_vocative}".strip()
                         
-                        notif_type = f"LEASE_{days_left}_{l_id}_{t_id}"
-                        if not check_already_sent(log_df, notif_type, today_str):
-                            msg = f"{t_greeting},\n\nΤο μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
-                            pending_notifications.append({
-                                "Type": notif_type, "Property_Name": p_char, "Kind": "Λήξη Μισθωτηρίου",
-                                "Date": end_d.strftime('%d/%m/%Y'), "Target_Phone": t_phone, "Target_Email": t_email, 
-                                "Target_Name": f"{t_name}", "Title": f"🔔 Λήξη Μίσθωσης σε {days_left} μέρες", 
-                                "Default_Message": msg,
-                                "Email_Subject": f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
-                            })
+                        msg = f"{t_greeting},\n\nΤο μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε 30 ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
+                        
+                        # Αυτόματο Email Ενοικιαστή (30 μέρες)
+                        email_type = f"AUTO_TENANT_LEASE_EMAIL_30_{l_id}_{t_id}"
+                        if not check_already_sent(log_df, email_type, today_str):
+                            subject = f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
+                            if send_via_email(t_email, subject, msg):
+                                gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, t_raw_name, email_type, f"[Auto Email] Λήξη Μίσθωσης"])
+                                st.toast(f"✅ Εστάλη αυτόματο Email στον ενοικιαστή {t_raw_name} (Λήξη Μίσθωσης 30 μέρες).")
+                                auto_triggered_count += 1
+                                
+                        # Αυτόματο SMS Ενοικιαστή (30 μέρες)
+                        sms_type = f"AUTO_TENANT_LEASE_SMS_30_{l_id}_{t_id}"
+                        if not check_already_sent(log_df, sms_type, today_str):
+                            if send_via_macrodroid(t_phone, msg, "sms"):
+                                gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, t_raw_name, sms_type, f"[Auto SMS] Λήξη Μίσθωσης"])
+                                st.toast(f"✅ Εστάλη αυτόματο SMS στον ενοικιαστή {t_raw_name} (Λήξη Μίσθωσης 30 μέρες).")
+                                auto_triggered_count += 1
 
     # =========================================================================
     # 2. ΕΛΕΓΧΟΣ ΑΣΦΑΛΙΣΤΗΡΙΩΝ
