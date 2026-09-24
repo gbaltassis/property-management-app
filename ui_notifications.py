@@ -296,6 +296,34 @@ def show():
                                 st.toast(f"✅ Εστάλη αυτόματο SMS στον ενοικιαστή {t_raw_name} (Λήξη Μίσθωσης 30 μέρες).")
                                 auto_triggered_count += 1
 
+            # --- ΧΕΙΡΟΚΙΝΗΤΕΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ΕΝΟΙΚΙΑΣΤΩΝ ΣΤΗΝ ΟΘΟΝΗ (ΜΟΝΟ 30 Μέρες) ---
+            if days_left == 30:
+                for t_id in t_ids:
+                    t_match = tenants_df[tenants_df["Tenant_ID"] == t_id]
+                    if not t_match.empty:
+                        t_name = str(t_match.iloc[0].get("Όνομα", ""))
+                        t_phone = str(t_match.iloc[0].get("Κινητό", "")).replace(" ", "")
+                        t_email = str(t_match.iloc[0].get("Email", ""))
+                        
+                        t_title = str(t_match.iloc[0].get("Τίτλος", "")).strip()
+                        if not t_title or t_title == 'nan': t_title = "Γεια σας"
+                        
+                        t_prosfonisi = str(t_match.iloc[0].get("Προσφώνηση", "")).strip()
+                        t_vocative = t_prosfonisi if t_prosfonisi and t_prosfonisi != 'nan' else t_name
+                        
+                        t_greeting = f"{t_title} {t_vocative}".strip()
+                        
+                        notif_type = f"LEASE_{days_left}_{l_id}_{t_id}"
+                        if not check_already_sent(log_df, notif_type, today_str):
+                            msg = f"{t_greeting},\n\nΤο μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
+                            pending_notifications.append({
+                                "Type": notif_type, "Property_Name": p_char, "Kind": "Λήξη Μισθωτηρίου",
+                                "Date": end_d.strftime('%d/%m/%Y'), "Target_Phone": t_phone, "Target_Email": t_email, 
+                                "Target_Name": f"{t_name}", "Title": f"🔔 Λήξη Μίσθωσης σε {days_left} μέρες", 
+                                "Default_Message": msg,
+                                "Email_Subject": f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
+                            })
+
     # =========================================================================
     # 2. ΕΛΕΓΧΟΣ ΑΣΦΑΛΙΣΤΗΡΙΩΝ
     # =========================================================================
