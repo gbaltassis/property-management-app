@@ -276,7 +276,7 @@ def show():
                         
                         notif_type = f"LEASE_{days_left}_{l_id}_{t_id}"
                         if not check_already_sent(log_df, notif_type, today_str):
-                            msg = f"{t_greeting},\n\nΣας υπενθυμίζουμε ότι το μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
+                            msg = f"{t_greeting},\n\nΤο μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
                             pending_notifications.append({
                                 "Type": notif_type, "Property_Name": p_char, "Kind": "Λήξη Μισθωτηρίου",
                                 "Date": end_d.strftime('%d/%m/%Y'), "Target_Phone": t_phone, "Target_Email": t_email, 
@@ -289,7 +289,8 @@ def show():
     if not insurances_df.empty:
         for _, ins in insurances_df.iterrows():
             i_id = str(ins.get("Insurance_ID", ""))
-            i_num = str(ins.get("Contract_Number", "")).strip() # Αριθμός Συμβολαίου
+            i_num = str(ins.get("Contract_Number", "")).strip()
+            i_comp = str(ins.get("Company", "")).strip()
             
             try: ren_d = datetime.strptime(str(ins.get("Renewal_Date", "")), "%Y-%m-%d").date()
             except: continue
@@ -302,7 +303,7 @@ def show():
                 
                 if not p_match.empty and not owners_df.empty:
                     prop = p_match.iloc[0]
-                    # Συγκέντρωση ΜΟΝΑΔΙΚΩΝ Ιδιοκτητών για τα ασφαλιστήρια
+                    # Μοναδικοί ιδιοκτήτες για ασφαλιστήρια
                     unique_afms = set()
                     for i in range(1, 4):
                         afm = str(prop.get(f'AFM_{i}', '')).strip()
@@ -327,7 +328,7 @@ def show():
                             
                             notif_type = f"INS_{days_left}_{i_id}_{afm}"
                             if not check_already_sent(log_df, notif_type, today_str):
-                                msg = f"{o_greeting},\n\nΤο ασφαλιστήριο ({ins.get('Category')}) με αριθμό συμβολαίου {i_num} για το '{p_char}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
+                                msg = f"{o_greeting},\n\nΤο ασφαλιστήριο ({ins.get('Category')}) με αριθμό συμβολαίου {i_num} στην εταιρεία {i_comp} για το '{p_char}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
                                 pending_notifications.append({
                                     "Type": notif_type, "Property_Name": p_char, "Kind": f"Ασφάλεια ({ins.get('Category', '')})",
                                     "Date": ren_d.strftime('%d/%m/%Y'), "Target_Phone": o_phone, "Target_Email": o_email, 
@@ -453,7 +454,7 @@ def show():
     else:
         st.warning(f"Έχετε {len(pending_notifications)} ειδοποιήσεις προς επεξεργασία και αποστολή.")
         
-        for idx, notif in enumerate(pending_notifications):
+        for notif in pending_notifications:
             with st.container(border=True):
                 st.markdown(f"#### {notif['Title']}")
                 
@@ -467,11 +468,12 @@ def show():
                 c4.markdown(f"**👤 Παραλήπτης**<br><span style='font-size: 14px; color: #444;'>**{notif['Target_Name']}**<br>📞 {target_phone}<br>📧 {target_email}</span>", unsafe_allow_html=True)
                 
                 st.write("") 
-                final_message = st.text_area("📝 Προτεινόμενο κείμενο μηνύματος (Επεξεργάσιμο):", value=notif['Default_Message'], height=100, key=f"msg_{idx}")
+                # ΕΔΩ ΗΤΑΝ ΤΟ ΜΕΓΑΛΟ BUG: Αλλαγή του key για να είναι μοναδικό ανά ειδοποίηση!
+                final_message = st.text_area("📝 Προτεινόμενο κείμενο μηνύματος (Επεξεργάσιμο):", value=notif['Default_Message'], height=100, key=f"msg_{notif['Type']}")
                 
                 b1, b2, b3 = st.columns(3)
                 
-                if b1.button("📱 SMS", key=f"btn_sms_{idx}", type="primary", use_container_width=True):
+                if b1.button("📱 SMS", key=f"btn_sms_{notif['Type']}", type="primary", use_container_width=True):
                     with st.spinner("Αποστολή SMS..."):
                         if send_via_macrodroid(notif["Target_Phone"], final_message, "sms"):
                             log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
@@ -480,7 +482,7 @@ def show():
                             time.sleep(1)
                             st.rerun()
                             
-                if b2.button("🟩 WhatsApp", key=f"btn_wa_{idx}", type="primary", use_container_width=True):
+                if b2.button("🟩 WhatsApp", key=f"btn_wa_{notif['Type']}", type="primary", use_container_width=True):
                     with st.spinner("Εντολή WhatsApp..."):
                         if send_via_macrodroid(notif["Target_Phone"], final_message, "whatsapp"):
                             log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
@@ -489,7 +491,7 @@ def show():
                             time.sleep(1)
                             st.rerun()
                             
-                if b3.button("📧 Email", key=f"btn_em_{idx}", type="primary", use_container_width=True):
+                if b3.button("📧 Email", key=f"btn_em_{notif['Type']}", type="primary", use_container_width=True):
                     with st.spinner("Αποστολή Email..."):
                         email_subj = notif.get("Email_Subject", "Ενημέρωση από Διαχείριση")
                         if send_via_email(notif["Target_Email"], email_subj, final_message):
