@@ -161,7 +161,7 @@ def show():
         leases_df = gsheets_service.fetch_all_leases()
         insurances_df = gsheets_service.fetch_all_insurances()
         try: owners_df = gsheets_service.fetch_all_owners()
-        except: owners_df = pd.DataFrame(columns=["Owner_ID", "Όνομα", "Επώνυμο", "ΑΦΜ", "Κινητό", "Email"])
+        except: owners_df = pd.DataFrame(columns=["Owner_ID", "Όνομα", "Επώνυμο", "ΑΦΜ", "Κινητό", "Email", "Προσφώνηση"])
     except Exception as e:
         st.error(f"Σφάλμα κατά τη φόρτωση δεδομένων: {e}")
         return
@@ -174,7 +174,7 @@ def show():
             if afm_str and afm_str != 'nan':
                 owner_options[afm_str] = f"{str(row.get('Επώνυμο', ''))} {str(row.get('Όνομα', ''))} ({afm_str})"
 
-    # --- TABS (Προστέθηκε η καρτέλα Ιδιοκτήτες) ---
+    # --- TABS ---
     main_tab_prop, main_tab_owner, main_tab_tenant, main_tab_ins = st.tabs(["🏢 Ακίνητα", "👑 Ιδιοκτήτες", "👥 Ενοικιαστές", "🛡️ Ασφαλιστήρια"])
 
     # =====================================================================
@@ -218,7 +218,6 @@ def show():
                         right = c4.selectbox(f"Είδος", ["Πλήρης Κυριότητα", "Επικαρπία", "Ψιλή Κυριότητα"], key=f"r{i}")
                         perc_input = c5.text_input(f"Ποσοστό %", value="100" if i==1 else "0", key=f"p{i}")
                         
-                        # Ανάκτηση ονόματος/επωνύμου από το DataFrame
                         n, s = "", ""
                         if sel_afm:
                             match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == sel_afm.zfill(9)]
@@ -232,7 +231,7 @@ def show():
                     sqm_val = pd.to_numeric(sqm_input.replace(',', '.'), errors='coerce')
                     if pd.isna(sqm_val): sqm_val = 0.0
                     
-                    if charact and atak and address and sqm_val > 0 and owner_data[2]: # owner_data[2] is AFM of Owner 1
+                    if charact and atak and address and sqm_val > 0 and owner_data[2]: 
                         try:
                             extra_str = ",".join(map(str, extra_months))
                             gsheets_service.add_property([f"PR-{uuid.uuid4().hex[:6].upper()}", atak, nomos, dimos, address, number, floor, sqm_input, charact] + owner_data + [extra_str, prop_val, "", fixed_exp])
@@ -275,7 +274,6 @@ def show():
                 e_owner_data = []
                 for i in range(1, 4):
                     with st.expander(f"Ιδιοκτήτης {i}", expanded=(i==1)):
-                        # Ελέγχουμε αν υπάρχει ήδη ΑΦΜ από παλιά καταχώρηση
                         curr_afm = str(sel_prop.get(f"AFM_{i}", "")).strip()
                         if len(curr_afm) == 8: curr_afm = "0" + curr_afm
                         
@@ -379,7 +377,7 @@ def show():
                 st.rerun()
 
     # =====================================================================
-    # 1Β. ΙΔΙΟΚΤΗΤΕΣ (ΝΕΑ ΚΑΡΤΕΛΑ)
+    # 1Β. ΙΔΙΟΚΤΗΤΕΣ
     # =====================================================================
     with main_tab_owner:
         if st.session_state.owner_action == 'new':
@@ -390,18 +388,22 @@ def show():
                 st.rerun()
 
             with st.form("new_owner_form", clear_on_submit=True):
-                fname, lname, afm = st.text_input("Όνομα *"), st.text_input("Επώνυμο *"), st.text_input("ΑΦΜ *")
+                fname, lname = st.text_input("Όνομα *"), st.text_input("Επώνυμο *")
+                prosfonisi = st.text_input("Προσφώνηση (π.χ. Γιώργο Μπαλτάση) *", help="Αυτό το πεδίο θα χρησιμοποιείται σε όλα τα αυτοματοποιημένα emails & SMS.")
+                afm = st.text_input("ΑΦΜ *")
                 phone, email = st.text_input("Κινητό Τηλέφωνο"), st.text_input("Email")
+                
                 if st.form_submit_button("Αποθήκευση Ιδιοκτήτη", type="primary", use_container_width=True):
-                    if fname and lname and afm:
+                    if fname and lname and afm and prosfonisi:
                         try:
-                            gsheets_service.add_owner([f"OW-{uuid.uuid4().hex[:6].upper()}", fname, lname, afm, phone, email])
+                            # Αποθήκευση: Όνομα, Επώνυμο, ΑΦΜ, Κινητό, Email, Προσφώνηση (στο τέλος)
+                            gsheets_service.add_owner([f"OW-{uuid.uuid4().hex[:6].upper()}", fname, lname, afm, phone, email, prosfonisi])
                             st.success("Ο Ιδιοκτήτης αποθηκεύτηκε!")
                             time.sleep(1.5)
                             st.session_state.owner_action = None
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
-                    else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
+                    else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ και Προσφώνηση.")
 
         elif st.session_state.owner_action == 'edit':
             st.markdown("### ✏️ Επεξεργασία Ιδιοκτήτη")
@@ -413,6 +415,7 @@ def show():
             sel_ow = owners_df[owners_df["Owner_ID"] == st.session_state.action_owner_id].iloc[0]
             with st.form("edit_owner_form"):
                 e_o_fname, e_o_lname = st.text_input("Όνομα *", value=str(sel_ow.get("Όνομα", ""))), st.text_input("Επώνυμο *", value=str(sel_ow.get("Επώνυμο", "")))
+                e_o_pros = st.text_input("Προσφώνηση *", value=str(sel_ow.get("Προσφώνηση", "")).replace('nan',''))
                 afm_v = str(sel_ow.get("ΑΦΜ", ""))
                 if len(afm_v) == 8: afm_v = "0" + afm_v
                 e_o_afm = st.text_input("ΑΦΜ *", value=afm_v)
@@ -429,20 +432,18 @@ def show():
                 except Exception as e: st.error(f"Σφάλμα: {e}")
 
             if upd_o_btn:
-                if e_o_fname and e_o_lname and e_o_afm:
+                if e_o_fname and e_o_lname and e_o_afm and e_o_pros:
                     try:
-                        gsheets_service.update_owner(st.session_state.action_owner_id, [st.session_state.action_owner_id, e_o_fname, e_o_lname, e_o_afm, e_o_phone, e_o_email])
+                        gsheets_service.update_owner(st.session_state.action_owner_id, [st.session_state.action_owner_id, e_o_fname, e_o_lname, e_o_afm, e_o_phone, e_o_email, e_o_pros])
                         st.success("Αποθηκεύτηκαν!")
                         time.sleep(1.5)
                         st.session_state.owner_action = None
                         st.rerun()
                     except Exception as e: st.error(f"Σφάλμα: {e}")
-                else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
+                else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ και Προσφώνηση.")
 
         else:
-            # Λίστα Ιδιοκτητών που δεν έχουν διαγραφεί (blank rows check)
             valid_owners = owners_df[owners_df["Όνομα"] != "ΔΙΑΓΡΑΜΜΕΝΟ"] if not owners_df.empty else pd.DataFrame()
-            
             if valid_owners.empty: 
                 st.info("Δεν υπάρχουν καταχωρημένοι ιδιοκτήτες. Προσθέστε για να τους συνδέετε εύκολα με τα Ακίνητα!")
             else:
@@ -507,18 +508,22 @@ def show():
                 st.rerun()
 
             with st.form("new_tenant_form", clear_on_submit=True):
-                fname, lname, afm = st.text_input("Όνομα *"), st.text_input("Επώνυμο *"), st.text_input("ΑΦΜ *")
+                fname, lname = st.text_input("Όνομα *"), st.text_input("Επώνυμο *")
+                prosfonisi = st.text_input("Προσφώνηση (π.χ. Γιώργο Μπαλτάση) *", help="Αυτό το πεδίο θα χρησιμοποιείται σε όλα τα αυτοματοποιημένα emails & SMS.")
+                afm = st.text_input("ΑΦΜ *")
                 phone, email = st.text_input("Κινητό Τηλέφωνο"), st.text_input("Email")
+                
                 if st.form_submit_button("Αποθήκευση Ενοικιαστή", type="primary", use_container_width=True):
-                    if fname and lname and afm:
+                    if fname and lname and afm and prosfonisi:
                         try:
-                            gsheets_service.add_tenant([f"TN-{uuid.uuid4().hex[:6].upper()}", fname, lname, afm, phone, email])
+                            # Αποθήκευση: Όνομα, Επώνυμο, ΑΦΜ, Κινητό, Email, Προσφώνηση (στο τέλος)
+                            gsheets_service.add_tenant([f"TN-{uuid.uuid4().hex[:6].upper()}", fname, lname, afm, phone, email, prosfonisi])
                             st.success("Ο ενοικιαστής αποθηκεύτηκε!")
                             time.sleep(1.5)
                             st.session_state.tenant_action = None
                             st.rerun()
                         except Exception as e: st.error(f"Σφάλμα: {e}")
-                    else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
+                    else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ και Προσφώνηση.")
 
         elif st.session_state.tenant_action == 'edit':
             st.markdown("### ✏️ Επεξεργασία Ενοικιαστή")
@@ -530,6 +535,7 @@ def show():
             sel_ten = tenants_df[tenants_df["Tenant_ID"] == st.session_state.action_tenant_id].iloc[0]
             with st.form("edit_tenant_form"):
                 e_t_fname, e_t_lname = st.text_input("Όνομα *", value=str(sel_ten.get("Όνομα", ""))), st.text_input("Επώνυμο *", value=str(sel_ten.get("Επώνυμο", "")))
+                e_t_pros = st.text_input("Προσφώνηση *", value=str(sel_ten.get("Προσφώνηση", "")).replace('nan',''))
                 afm_v = str(sel_ten.get("ΑΦΜ", ""))
                 if len(afm_v) == 8: afm_v = "0" + afm_v
                 e_t_afm = st.text_input("ΑΦΜ *", value=afm_v)
@@ -546,15 +552,15 @@ def show():
                 except Exception as e: st.error(f"Σφάλμα: {e}")
 
             if upd_t_btn:
-                if e_t_fname and e_t_lname and e_t_afm:
+                if e_t_fname and e_t_lname and e_t_afm and e_t_pros:
                     try:
-                        gsheets_service.update_tenant(st.session_state.action_tenant_id, [st.session_state.action_tenant_id, e_t_fname, e_t_lname, e_t_afm, e_t_phone, e_t_email])
+                        gsheets_service.update_tenant(st.session_state.action_tenant_id, [st.session_state.action_tenant_id, e_t_fname, e_t_lname, e_t_afm, e_t_phone, e_t_email, e_t_pros])
                         st.success("Αποθηκεύτηκαν!")
                         time.sleep(1.5)
                         st.session_state.tenant_action = None
                         st.rerun()
                     except Exception as e: st.error(f"Σφάλμα: {e}")
-                else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ.")
+                else: st.warning("Παρακαλώ συμπληρώστε Όνομα, Επώνυμο, ΑΦΜ και Προσφώνηση.")
 
         else:
             if tenants_df.empty: 
