@@ -255,7 +255,7 @@ def show():
                             if days_left == 2:
                                 sms_type = f"AUTO_OWNER_LEASE_SMS_2_{l_id}_{afm}"
                                 if not check_already_sent(log_df, sms_type, today_str):
-                                    sms_body = f"Η μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}. Ενοικιαστής {t_names_str}, {t_phones_str}."
+                                    sms_body = f"{o_greeting},\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}. Ενοικιαστής {t_names_str}, {t_phones_str}."
                                     if send_via_macrodroid(o_phone, sms_body, "sms"):
                                         gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, sms_type, f"[Auto SMS] Λήξη Μίσθωσης"])
                                         st.toast(f"✅ Εστάλη αυτόματο SMS στον/στην {o_raw_name} για λήξη μίσθωσης.")
@@ -281,7 +281,7 @@ def show():
                         
                         notif_type = f"LEASE_{days_left}_{l_id}_{t_id}"
                         if not check_already_sent(log_df, notif_type, today_str):
-                            msg = f"{t_greeting}. Σας υπενθυμίζουμε ότι το μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}). Ιδιοκτήτης/ες: {o_names_str}"
+                            msg = f"{t_greeting},\n\nΣας υπενθυμίζουμε ότι το μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
                             pending_notifications.append({
                                 "Type": notif_type, "Property_Name": p_char, "Kind": "Λήξη Μισθωτηρίου",
                                 "Date": end_d.strftime('%d/%m/%Y'), "Target_Phone": t_phone, "Target_Email": t_email, 
@@ -430,7 +430,7 @@ def show():
                     
                     notif_type = f"PAY_{pay_id}_{t_id}"
                     if not check_already_sent(log_df, notif_type, today_str):
-                        msg = f"{t_greeting}. Υπενθύμιση: Εκκρεμεί η εξόφληση ποσού {amount}€ για το '{p_char}'. Παρακαλούμε για την τακτοποίησή της το συντομότερο."
+                        msg = f"{t_greeting},\n\nΥπενθύμιση: Εκκρεμεί η εξόφληση ποσού {amount}€ για το '{p_char}'. Παρακαλούμε για την τακτοποίησή της το συντομότερο."
                         pending_notifications.append({
                             "Type": notif_type, "Property_Name": p_char, "Kind": f"{pay_type} ({amount}€)",
                             "Date": pay_date_str, "Target_Phone": t_phone, "Target_Email": t_email, 
