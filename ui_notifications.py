@@ -178,7 +178,9 @@ def show():
     pending_notifications = []
     auto_triggered_count = 0
 
+    # =========================================================================
     # 1. ΕΛΕΓΧΟΣ ΜΙΣΘΩΣΕΩΝ
+    # =========================================================================
     if not leases_df.empty:
         for _, lease in leases_df.iterrows():
             l_id = str(lease.get("Lease_ID", ""))
@@ -206,7 +208,7 @@ def show():
             t_names_str = ", ".join(t_full_names) if t_full_names else "Άγνωστος Ενοικιαστής"
             t_phones_str = ", ".join(t_phones) if t_phones else "-"
 
-            # Συγκέντρωση ΜΟΝΑΔΙΚΩΝ Ιδιοκτητών (Αποφυγή διπλοεγγραφών λόγω ψιλής/επικαρπίας)
+            # Συγκέντρωση ΜΟΝΑΔΙΚΩΝ Ιδιοκτητών 
             unique_afms = set()
             o_full_names = []
             if not p_match.empty and not owners_df.empty:
@@ -242,7 +244,7 @@ def show():
                         email_type = f"AUTO_OWNER_LEASE_EMAIL_{days_left}_{l_id}_{afm}"
                         if not check_already_sent(log_df, email_type, today_str):
                             subject = f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
-                            body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}.\n\nΕνοικιαστής/ές: {t_names_str}, {t_phones_str}."
+                            body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}.\n\nΕνοικιαστής/ές: {t_names_str}."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Λήξη Μίσθωσης"])
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για λήξη μίσθωσης.")
@@ -285,7 +287,9 @@ def show():
                                 "Email_Subject": f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
                             })
 
+    # =========================================================================
     # 2. ΕΛΕΓΧΟΣ ΑΣΦΑΛΙΣΤΗΡΙΩΝ
+    # =========================================================================
     if not insurances_df.empty:
         for _, ins in insurances_df.iterrows():
             i_id = str(ins.get("Insurance_ID", ""))
@@ -315,6 +319,7 @@ def show():
                         owner_match = owners_df[owners_df['ΑΦΜ'].astype(str).str.zfill(9) == afm.zfill(9)]
                         if not owner_match.empty:
                             o_name = str(owner_match.iloc[0].get("Όνομα", ""))
+                            o_raw_name = f"{o_name} {owner_match.iloc[0].get('Επώνυμο', '')}".strip()
                             o_phone = str(owner_match.iloc[0].get("Κινητό", "")).replace(" ", "")
                             o_email = str(owner_match.iloc[0].get("Email", ""))
                             
@@ -325,19 +330,32 @@ def show():
                             o_vocative = o_prosfonisi if o_prosfonisi and o_prosfonisi != 'nan' else o_name
                             
                             o_greeting = f"{o_title} {o_vocative}".strip()
+
+                            # --- ΑΥΤΟΜΑΤΕΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ΙΔΙΟΚΤΗΤΩΝ ΓΙΑ ΛΗΞΗ ΑΣΦΑΛΙΣΤΗΡΙΟΥ (EMAIL) ---
+                            email_type = f"AUTO_OWNER_INS_EMAIL_{days_left}_{i_id}_{afm}"
+                            if not check_already_sent(log_df, email_type, today_str):
+                                subject = f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΑΣΦΑΛΙΣΤΗΡΙΟΥ {p_char}"
+                                body = f"{o_greeting},\n\nΤο ασφαλιστήριο ({ins.get('Category')}) με αριθμό συμβολαίου {i_num} στην εταιρεία {i_comp} για το '{p_char}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
+                                if send_via_email(o_email, subject, body):
+                                    gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Λήξη Ασφαλιστηρίου"])
+                                    st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για λήξη ασφαλιστηρίου.")
+                                    auto_triggered_count += 1
                             
+                            # --- ΧΕΙΡΟΚΙΝΗΤΕΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ΙΔΙΟΚΤΗΤΩΝ ΣΤΗΝ ΟΘΟΝΗ ---
                             notif_type = f"INS_{days_left}_{i_id}_{afm}"
                             if not check_already_sent(log_df, notif_type, today_str):
                                 msg = f"{o_greeting},\n\nΤο ασφαλιστήριο ({ins.get('Category')}) με αριθμό συμβολαίου {i_num} στην εταιρεία {i_comp} για το '{p_char}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
                                 pending_notifications.append({
                                     "Type": notif_type, "Property_Name": p_char, "Kind": f"Ασφάλεια ({ins.get('Category', '')})",
                                     "Date": ren_d.strftime('%d/%m/%Y'), "Target_Phone": o_phone, "Target_Email": o_email, 
-                                    "Target_Name": f"{o_name}", "Title": f"🛡️ Λήξη Ασφαλιστηρίου σε {days_left} μέρες", 
+                                    "Target_Name": f"{o_raw_name}", "Title": f"🛡️ Λήξη Ασφαλιστηρίου σε {days_left} μέρες", 
                                     "Default_Message": msg,
                                     "Email_Subject": f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΑΣΦΑΛΙΣΤΗΡΙΟΥ {p_char}"
                                 })
 
+    # =========================================================================
     # 3. ΕΛΕΓΧΟΣ ΕΚΚΡΕΜΩΝ ΟΦΕΙΛΩΝ / ΕΙΣΠΡΑΞΕΩΝ
+    # =========================================================================
     if not payments_df.empty and 'Status' in payments_df.columns:
         pending_payments = payments_df[payments_df['Status'] == 'Εκκρεμεί']
         
@@ -412,7 +430,7 @@ def show():
                         email_type = f"AUTO_OWNER_PAY_EMAIL_{days_late}_{pay_id}_{afm}"
                         if not check_already_sent(log_df, email_type, today_str):
                             subject = f"ΕΙΔΟΠΟΙΗΣΗ ΕΚΚΡΕΜΟΥΣ ΟΦΕΙΛΗΣ {p_area} {p_street} {p_num}".strip()
-                            body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί η οφειλή για το {pay_type.lower()} ({pay_desc}), από τις {pay_date_str}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
+                            body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί η οφειλή για το {pay_type.lower()}, {pay_desc}, από τις {pay_date_str}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Οφειλή"])
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για εκκρεμή οφειλή.")
@@ -449,6 +467,7 @@ def show():
         time.sleep(2)
         st.rerun()
 
+    # ΟΠΤΙΚΟΠΟΙΗΣΗ ΣΤΗΝ ΟΘΟΝΗ
     if not pending_notifications:
         st.success("🎉 Δεν υπάρχουν εκκρεμείς ειδοποιήσεις για σήμερα.")
     else:
@@ -468,7 +487,6 @@ def show():
                 c4.markdown(f"**👤 Παραλήπτης**<br><span style='font-size: 14px; color: #444;'>**{notif['Target_Name']}**<br>📞 {target_phone}<br>📧 {target_email}</span>", unsafe_allow_html=True)
                 
                 st.write("") 
-                # ΕΔΩ ΗΤΑΝ ΤΟ ΜΕΓΑΛΟ BUG: Αλλαγή του key για να είναι μοναδικό ανά ειδοποίηση!
                 final_message = st.text_area("📝 Προτεινόμενο κείμενο μηνύματος (Επεξεργάσιμο):", value=notif['Default_Message'], height=100, key=f"msg_{notif['Type']}")
                 
                 b1, b2, b3 = st.columns(3)
