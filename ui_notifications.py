@@ -242,7 +242,7 @@ def show():
                         email_type = f"AUTO_OWNER_LEASE_EMAIL_{days_left}_{l_id}_{afm}"
                         if not check_already_sent(log_df, email_type, today_str):
                             subject = f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
-                            body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}.\n\nΕνοικιαστής/ές: {t_names_str}."
+                            body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}.\n\nΕνοικιαστής/ές: {t_names_str}, {t_phones_str}."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Λήξη Μίσθωσης"])
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για λήξη μίσθωσης.")
