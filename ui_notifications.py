@@ -412,7 +412,7 @@ def show():
                         email_type = f"AUTO_OWNER_PAY_EMAIL_{days_late}_{pay_id}_{afm}"
                         if not check_already_sent(log_df, email_type, today_str):
                             subject = f"ΕΙΔΟΠΟΙΗΣΗ ΕΚΚΡΕΜΟΥΣ ΟΦΕΙΛΗΣ {p_area} {p_street} {p_num}".strip()
-                            body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί η οφειλή για το {pay_type.lower()}, {pay_desc}, από τις {pay_date_str}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
+                            body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί η οφειλή για το {pay_type.lower()} ({pay_desc}), από τις {pay_date_str}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Οφειλή"])
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για εκκρεμή οφειλή.")
