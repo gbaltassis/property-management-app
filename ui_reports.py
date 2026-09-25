@@ -8,7 +8,7 @@ import json
 COMMON_CSS = """
 <style>
     html, body { font-family: sans-serif; }
-    .table-container { height: 550px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .table-container { max-height: 500px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 5px; }
     .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 600px; }
     .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
     .custom-table th { background-color: #f0f2f6; color: #31333F; position: sticky; top: 0; z-index: 4; box-shadow: 0 1px 0 #ddd; cursor: pointer; user-select: none; transition: background-color 0.2s;}
@@ -351,4 +351,5 @@ def show():
         </body></html>
         """
         import streamlit.components.v1 as components
+        # ΣΤΑΘΕΡΟ ΥΨΟΣ 520 ΑΝΤΙ ΓΙΑ ΔΥΝΑΜΙΚΟ
         components.html(html_code, height=520, scrolling=False)
