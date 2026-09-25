@@ -34,25 +34,23 @@ MACRODROID_URL = st.secrets.get("macrodroid_url", "")
 EMAIL_SENDER = st.secrets.get("email_address", "")
 EMAIL_PASSWORD = st.secrets.get("email_password", "")
 
-# Αρχικοποίηση τοπικής μνήμης για άμεσο μπλοκάρισμα διπλοεγγραφών
-if 'sent_notifications_shield' not in st.session_state:
-    st.session_state.sent_notifications_shield = set()
-
 def send_via_macrodroid(phone, message, channel):
     if not MACRODROID_URL:
         st.error("Σφάλμα: Δεν έχει οριστεί το 'macrodroid_url' στα Secrets!")
         return False
     try:
         params = {"number": phone, "message": message, "channel": channel}
+        # ΑΥΞΗΣΗ ΤΟΥ TIMEOUT ΣΤΑ 40 ΔΕΥΤΕΡΟΛΕΠΤΑ
         response = requests.get(MACRODROID_URL, params=params, timeout=40)
         if response.status_code == 200:
-            time.sleep(3) # Ανάσα για το κινητό
+            # ΠΑΥΣΗ 3 ΔΕΥΤΕΡΟΛΕΠΤΩΝ ΓΙΑ "ΑΝΑΣΑ" ΣΤΟ ΚΙΝΗΤΟ
+            time.sleep(3)
             return True
         else:
             st.error(f"Το MacroDroid επέστρεψε σφάλμα: {response.status_code}")
             return False
     except requests.exceptions.Timeout:
-        st.warning("Το MacroDroid καθυστέρησε να απαντήσει (αλλά ίσως η εντολή να έφτασε).")
+        st.warning("Το MacroDroid καθυστέρησε να απαντήσει (αλλά ίσως η εντολή να έφτασε). Δίνουμε χρόνο στο κινητό να ξυπνήσει.")
         return False
     except requests.exceptions.RequestException as e:
         st.error(f"Αποτυχία επικοινωνίας με το MacroDroid: {e}")
@@ -84,8 +82,9 @@ def send_via_email(to_email, subject, message):
         return False
 
 def check_already_sent(log_df, n_type, today_str):
-    # 1η ΓΡΑΜΜΗ ΑΜΥΝΑΣ: Η τοπική μνήμη (Ακαριαία)
-    if n_type in st.session_state.sent_notifications_shield:
+    # 1η ΓΡΑΜΜΗ ΑΜΥΝΑΣ: Η τοπική μνήμη (Ακαριαία - με χρήση .get() για να αποφύγουμε σφάλματα)
+    shield = st.session_state.get('sent_notifications_shield', set())
+    if n_type in shield:
         return True
         
     # 2η ΓΡΑΜΜΗ ΑΜΥΝΑΣ: Το Google Sheet Log
@@ -157,6 +156,11 @@ def manual_notification_dialog(tenants_df, owners_df, today_str):
 # ΚΕΝΤΡΙΚΗ ΣΕΛΙΔΑ ΕΙΔΟΠΟΙΗΣΕΩΝ
 # -------------------------------------------------------------
 def show():
+    # Η ΑΡΧΙΚΟΠΟΙΗΣΗ ΤΗΣ "ΑΣΠΙΔΑΣ" ΜΕΤΑΦΕΡΘΗΚΕ ΕΔΩ
+    # Έτσι κάθε συσκευή (pc ή κινητό) που ανοίγει τη σελίδα θα φτιάχνει τη δική της μνήμη.
+    if 'sent_notifications_shield' not in st.session_state:
+        st.session_state.sent_notifications_shield = set()
+
     st.markdown(COMMON_CSS, unsafe_allow_html=True)
     
     try:
