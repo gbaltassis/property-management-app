@@ -34,23 +34,25 @@ MACRODROID_URL = st.secrets.get("macrodroid_url", "")
 EMAIL_SENDER = st.secrets.get("email_address", "")
 EMAIL_PASSWORD = st.secrets.get("email_password", "")
 
+# Αρχικοποίηση τοπικής μνήμης για άμεσο μπλοκάρισμα διπλοεγγραφών
+if 'sent_notifications_shield' not in st.session_state:
+    st.session_state.sent_notifications_shield = set()
+
 def send_via_macrodroid(phone, message, channel):
     if not MACRODROID_URL:
         st.error("Σφάλμα: Δεν έχει οριστεί το 'macrodroid_url' στα Secrets!")
         return False
     try:
         params = {"number": phone, "message": message, "channel": channel}
-        # ΑΥΞΗΣΗ ΤΟΥ TIMEOUT ΣΤΑ 40 ΔΕΥΤΕΡΟΛΕΠΤΑ
         response = requests.get(MACRODROID_URL, params=params, timeout=40)
         if response.status_code == 200:
-            # ΠΑΥΣΗ 3 ΔΕΥΤΕΡΟΛΕΠΤΩΝ ΓΙΑ "ΑΝΑΣΑ" ΣΤΟ ΚΙΝΗΤΟ
-            time.sleep(3)
+            time.sleep(3) # Ανάσα για το κινητό
             return True
         else:
             st.error(f"Το MacroDroid επέστρεψε σφάλμα: {response.status_code}")
             return False
     except requests.exceptions.Timeout:
-        st.warning("Το MacroDroid καθυστέρησε να απαντήσει (αλλά ίσως η εντολή να έφτασε). Δίνουμε χρόνο στο κινητό να ξυπνήσει.")
+        st.warning("Το MacroDroid καθυστέρησε να απαντήσει (αλλά ίσως η εντολή να έφτασε).")
         return False
     except requests.exceptions.RequestException as e:
         st.error(f"Αποτυχία επικοινωνίας με το MacroDroid: {e}")
@@ -82,6 +84,11 @@ def send_via_email(to_email, subject, message):
         return False
 
 def check_already_sent(log_df, n_type, today_str):
+    # 1η ΓΡΑΜΜΗ ΑΜΥΝΑΣ: Η τοπική μνήμη (Ακαριαία)
+    if n_type in st.session_state.sent_notifications_shield:
+        return True
+        
+    # 2η ΓΡΑΜΜΗ ΑΜΥΝΑΣ: Το Google Sheet Log
     if log_df.empty or 'Type' not in log_df.columns or 'Date_Sent' not in log_df.columns:
         return False
     match = log_df[(log_df['Type'] == n_type) & (log_df['Date_Sent'] == today_str)]
@@ -253,6 +260,7 @@ def show():
                             body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας '{p_char}' στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΕνοικιαστής/ές: {t_names_str}."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Λήξη Μίσθωσης"])
+                                st.session_state.sent_notifications_shield.add(email_type)
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για λήξη μίσθωσης.")
                                 auto_triggered_count += 1
                                 
@@ -262,6 +270,7 @@ def show():
                                 sms_body = f"{o_greeting},\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας '{p_char}' στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}). Ενοικιαστής/ές: {t_names_str}, {t_phones_str}."
                                 if send_via_macrodroid(o_phone, sms_body, "sms"):
                                     gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, sms_type, f"[Auto SMS] Λήξη Μίσθωσης"])
+                                    st.session_state.sent_notifications_shield.add(sms_type)
                                     st.toast(f"✅ Εστάλη αυτόματο SMS στον/στην {o_raw_name} για λήξη μίσθωσης.")
                                     auto_triggered_count += 1
 
@@ -291,6 +300,7 @@ def show():
                             subject = f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
                             if send_via_email(t_email, subject, msg):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, t_raw_name, email_type, f"[Auto Email] Λήξη Μίσθωσης"])
+                                st.session_state.sent_notifications_shield.add(email_type)
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον ενοικιαστή {t_raw_name} (Λήξη Μίσθωσης 30 μέρες).")
                                 auto_triggered_count += 1
                                 
@@ -299,6 +309,7 @@ def show():
                         if not check_already_sent(log_df, sms_type, today_str):
                             if send_via_macrodroid(t_phone, msg, "sms"):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, t_raw_name, sms_type, f"[Auto SMS] Λήξη Μίσθωσης"])
+                                st.session_state.sent_notifications_shield.add(sms_type)
                                 st.toast(f"✅ Εστάλη αυτόματο SMS στον ενοικιαστή {t_raw_name} (Λήξη Μίσθωσης 30 μέρες).")
                                 auto_triggered_count += 1
 
@@ -350,7 +361,6 @@ def show():
                 
                 if not p_match.empty and not owners_df.empty:
                     prop = p_match.iloc[0]
-                    # Μοναδικοί ιδιοκτήτες για ασφαλιστήρια
                     unique_afms = set()
                     for i in range(1, 4):
                         afm = str(prop.get(f'AFM_{i}', '')).strip()
@@ -381,6 +391,7 @@ def show():
                                 body = f"{o_greeting},\n\nΤο ασφαλιστήριο ({ins.get('Category')}) με αριθμό συμβολαίου {i_num} στην εταιρεία {i_comp} για το '{p_char}' λήγει σε {days_left} ημέρες ({ren_d.strftime('%d/%m/%Y')})."
                                 if send_via_email(o_email, subject, body):
                                     gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Λήξη Ασφαλιστηρίου"])
+                                    st.session_state.sent_notifications_shield.add(email_type)
                                     st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για λήξη ασφαλιστηρίου.")
                                     auto_triggered_count += 1
                             
@@ -444,7 +455,6 @@ def show():
                     t_phones.append(str(t_m.iloc[0].get('Κινητό', '')).replace(" ", ""))
             t_names_str = ", ".join(t_full_names) if t_full_names else "Άγνωστος Ενοικιαστής"
 
-            # Συγκέντρωση ΜΟΝΑΔΙΚΩΝ Ιδιοκτητών για τις Οφειλές
             unique_afms = set()
             if not p_match.empty and not owners_df.empty:
                 prop = p_match.iloc[0]
@@ -476,6 +486,7 @@ def show():
                             body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας '{p_char}' στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί εδώ και {days_late} ημέρες (από τις {pay_date_str}) η οφειλή για το {pay_type.lower()}, {pay_desc}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Οφειλή"])
+                                st.session_state.sent_notifications_shield.add(email_type)
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για εκκρεμή οφειλή.")
                                 auto_triggered_count += 1
 
@@ -507,7 +518,7 @@ def show():
                         })
 
     if auto_triggered_count > 0:
-        time.sleep(2)
+        time.sleep(5) # Αυξημένος χρόνος αναμονής πριν την ανανέωση της σελίδας
         st.rerun()
 
     # ΟΠΤΙΚΟΠΟΙΗΣΗ ΣΤΗΝ ΟΘΟΝΗ
@@ -539,6 +550,7 @@ def show():
                         if send_via_macrodroid(notif["Target_Phone"], final_message, "sms"):
                             log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
                             gsheets_service.add_notification_log([log_id, today_str, notif["Target_Name"], notif["Type"], f"[SMS] {final_message}"])
+                            st.session_state.sent_notifications_shield.add(notif["Type"])
                             st.success("Το SMS στάλθηκε!")
                             time.sleep(1)
                             st.rerun()
@@ -548,6 +560,7 @@ def show():
                         if send_via_macrodroid(notif["Target_Phone"], final_message, "whatsapp"):
                             log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
                             gsheets_service.add_notification_log([log_id, today_str, notif["Target_Name"], notif["Type"], f"[WhatsApp] {final_message}"])
+                            st.session_state.sent_notifications_shield.add(notif["Type"])
                             st.success("Η εντολή WhatsApp στάλθηκε!")
                             time.sleep(1)
                             st.rerun()
@@ -558,6 +571,7 @@ def show():
                         if send_via_email(notif["Target_Email"], email_subj, final_message):
                             log_id = f"LOG-{uuid.uuid4().hex[:6].upper()}"
                             gsheets_service.add_notification_log([log_id, today_str, notif["Target_Name"], notif["Type"], f"[Email] {final_message}"])
+                            st.session_state.sent_notifications_shield.add(notif["Type"])
                             st.success("Το Email στάλθηκε!")
                             time.sleep(1)
                             st.rerun()
