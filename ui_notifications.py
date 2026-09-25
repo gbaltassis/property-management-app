@@ -40,12 +40,18 @@ def send_via_macrodroid(phone, message, channel):
         return False
     try:
         params = {"number": phone, "message": message, "channel": channel}
-        response = requests.get(MACRODROID_URL, params=params, timeout=15)
+        # ΑΥΞΗΣΗ ΤΟΥ TIMEOUT ΣΤΑ 40 ΔΕΥΤΕΡΟΛΕΠΤΑ
+        response = requests.get(MACRODROID_URL, params=params, timeout=40)
         if response.status_code == 200:
+            # ΠΑΥΣΗ 3 ΔΕΥΤΕΡΟΛΕΠΤΩΝ ΓΙΑ "ΑΝΑΣΑ" ΣΤΟ ΚΙΝΗΤΟ
+            time.sleep(3)
             return True
         else:
             st.error(f"Το MacroDroid επέστρεψε σφάλμα: {response.status_code}")
             return False
+    except requests.exceptions.Timeout:
+        st.warning("Το MacroDroid καθυστέρησε να απαντήσει (αλλά ίσως η εντολή να έφτασε). Δίνουμε χρόνο στο κινητό να ξυπνήσει.")
+        return False
     except requests.exceptions.RequestException as e:
         st.error(f"Αποτυχία επικοινωνίας με το MacroDroid: {e}")
         return False
@@ -244,7 +250,7 @@ def show():
                         email_type = f"AUTO_OWNER_LEASE_EMAIL_{days_left}_{l_id}_{afm}"
                         if not check_already_sent(log_df, email_type, today_str):
                             subject = f"ΕΙΔΟΠΟΙΗΣΗ ΛΗΞΗΣ ΜΙΣΘΩΣΗΣ {p_char}"
-                            body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}.\n\nΕνοικιαστής/ές: {t_names_str}."
+                            body = f"{o_greeting},\n\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας '{p_char}' στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΕνοικιαστής/ές: {t_names_str}."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Λήξη Μίσθωσης"])
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για λήξη μίσθωσης.")
@@ -253,7 +259,7 @@ def show():
                         if days_left == 2:
                             sms_type = f"AUTO_OWNER_LEASE_SMS_2_{l_id}_{afm}"
                             if not check_already_sent(log_df, sms_type, today_str):
-                                sms_body = f"Η μίσθωση για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει στις {end_d.strftime('%d/%m/%Y')}. Ενοικιαστής {t_names_str}, {t_phones_str}."
+                                sms_body = f"{o_greeting},\nΗ μίσθωση για το ακίνητο ιδιοκτησίας σας '{p_char}' στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}). Ενοικιαστής/ές: {t_names_str}, {t_phones_str}."
                                 if send_via_macrodroid(o_phone, sms_body, "sms"):
                                     gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, sms_type, f"[Auto SMS] Λήξη Μίσθωσης"])
                                     st.toast(f"✅ Εστάλη αυτόματο SMS στον/στην {o_raw_name} για λήξη μίσθωσης.")
@@ -277,7 +283,7 @@ def show():
                         
                         t_greeting = f"{t_title} {t_vocative}".strip()
                         
-                        msg = f"{t_greeting},\n\nΤο μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε 30 ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
+                        msg = f"{t_greeting},\n\nΤο μισθωτήριο για το ακίνητο στην περιοχή {p_area} και επί της οδού {p_street} {p_num}, λήγει σε {days_left} ημέρες ({end_d.strftime('%d/%m/%Y')}).\n\nΙδιοκτήτης/ες: {o_names_str}"
                         
                         # Αυτόματο Email Ενοικιαστή (30 μέρες)
                         email_type = f"AUTO_TENANT_LEASE_EMAIL_30_{l_id}_{t_id}"
@@ -467,7 +473,7 @@ def show():
                         email_type = f"AUTO_OWNER_PAY_EMAIL_{days_late}_{pay_id}_{afm}"
                         if not check_already_sent(log_df, email_type, today_str):
                             subject = f"ΕΙΔΟΠΟΙΗΣΗ ΕΚΚΡΕΜΟΥΣ ΟΦΕΙΛΗΣ {p_area} {p_street} {p_num}".strip()
-                            body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας {p_char} στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί η οφειλή για το {pay_type.lower()}, {pay_desc}, από τις {pay_date_str}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
+                            body = f"{o_greeting},\n\nΣας στέλνουμε για το ακίνητο ιδιοκτησίας σας '{p_char}' στην περιοχή {p_area} και επί της οδού {p_street} {p_num}.\nΣας υπενθυμίζουμε πως εκκρεμεί εδώ και {days_late} ημέρες (από τις {pay_date_str}) η οφειλή για το {pay_type.lower()}, {pay_desc}.\n\nΠαρακαλούμε επικοινωνήστε με τον ενοικιαστή σας {t_names_str} για την τακτοποίηση της οφειλής."
                             if send_via_email(o_email, subject, body):
                                 gsheets_service.add_notification_log([f"LOG-{uuid.uuid4().hex[:6].upper()}", today_str, o_raw_name, email_type, f"[Auto Email] Οφειλή"])
                                 st.toast(f"✅ Εστάλη αυτόματο Email στον/στην {o_raw_name} για εκκρεμή οφειλή.")
@@ -491,7 +497,7 @@ def show():
                     
                     notif_type = f"PAY_{pay_id}_{t_id}"
                     if not check_already_sent(log_df, notif_type, today_str):
-                        msg = f"{t_greeting},\n\nΕκκρεμεί από {pay_date_str} η εξόφληση για το {pay_type.lower()}, ποσού {amount}€ για το ακίνητο στην περιοχή {p_area}, επί της οδού {p_street} {p_num}."
+                        msg = f"{t_greeting},\n\nΕκκρεμεί εδώ και {days_late} ημέρες (από {pay_date_str}) η εξόφληση για το {pay_type.lower()}, ποσού {amount}€ για το ακίνητο στην περιοχή {p_area}, επί της οδού {p_street} {p_num}."
                         pending_notifications.append({
                             "Type": notif_type, "Property_Name": p_char, "Kind": f"{pay_type} ({amount}€)",
                             "Date": pay_date_str, "Target_Phone": t_phone, "Target_Email": t_email, 
