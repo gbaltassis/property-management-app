@@ -18,9 +18,9 @@ COMMON_CSS = """
 <style>
     html, body { font-family: sans-serif; background-color: transparent; }
     .table-container { 
-        max-height: 550px; overflow-y: auto; overflow-x: auto; 
+        max-height: 500px; overflow-y: auto; overflow-x: auto; 
         border: 1px solid #ddd; border-radius: 8px; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 5px; 
     }
     .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; background: white; min-width: 600px; }
     .custom-table th, .custom-table td { padding: 6px 8px; border-bottom: 1px solid #e6e9ef; border-right: 1px solid #e6e9ef; text-align: left; vertical-align: middle; line-height: 1.2; }
@@ -374,8 +374,8 @@ def show():
                             </tr>
                     """
                 html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                t_height = min(600, 70 + len(properties_df) * 45)
-                components.html(html_code, height=t_height, scrolling=False)
+                # ΣΤΑΘΕΡΟ ΥΨΟΣ 520 ΑΝΤΙ ΓΙΑ ΔΥΝΑΜΙΚΟ
+                components.html(html_code, height=520, scrolling=False)
                 
             if st.button("➕ Νέο Ακίνητο", type="primary", use_container_width=True):
                 st.session_state.prop_action = 'new'
@@ -505,8 +505,8 @@ def show():
                         </tr>
                     """
                 html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                t_height = min(600, 70 + len(valid_owners) * 45)
-                components.html(html_code, height=t_height, scrolling=False)
+                # ΣΤΑΘΕΡΟ ΥΨΟΣ 520 ΑΝΤΙ ΓΙΑ ΔΥΝΑΜΙΚΟ
+                components.html(html_code, height=520, scrolling=False)
 
             if st.button("➕ Νέος Ιδιοκτήτης", type="primary", use_container_width=True):
                 st.session_state.owner_action = 'new'
@@ -629,8 +629,8 @@ def show():
                             </tr>
                         """
                 html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                t_height = min(600, 70 + len(tenants_df) * 45)
-                components.html(html_code, height=t_height, scrolling=False)
+                # ΣΤΑΘΕΡΟ ΥΨΟΣ 520 ΑΝΤΙ ΓΙΑ ΔΥΝΑΜΙΚΟ
+                components.html(html_code, height=520, scrolling=False)
 
             if st.button("➕ Νέος Ενοικιαστής", type="primary", use_container_width=True):
                 st.session_state.tenant_action = 'new'
@@ -841,8 +841,8 @@ def show():
                                 </tr>
                         """
                     html_code += f"</tbody></table></div>{COMMON_JS}</body></html>"
-                    t_height = min(600, 70 + len(ins_list) * 45)
-                    components.html(html_code, height=t_height, scrolling=False)
+                    # ΣΤΑΘΕΡΟ ΥΨΟΣ 520 ΑΝΤΙ ΓΙΑ ΔΥΝΑΜΙΚΟ
+                    components.html(html_code, height=520, scrolling=False)
 
             st.write("")
             if st.button("➕ Νέο Ασφαλιστήριο", type="primary", use_container_width=True):
